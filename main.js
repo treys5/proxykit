@@ -12,7 +12,12 @@ let mainWindow = null;
 function log(msg) {
   var line = new Date().toISOString() + '  ' + String(msg) + '\n';
   process.stdout.write(line);
-  try { fs.appendFileSync(path.join(__dirname, 'startup.log'), line); } catch(e) {}
+  try {
+    // app.getPath() not available yet at this point, use env var set later
+    // or fall back to os.homedir so writes always succeed in packaged builds
+    var logDir = process.env.APP_DATA_DIR || app.getPath('userData');
+    fs.appendFileSync(path.join(logDir, 'startup.log'), line);
+  } catch(e) {}
 }
 
 log('main.js start — PORT=' + PORT + ' electron=' + process.versions.electron + ' platform=' + process.platform);

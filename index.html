@@ -436,7 +436,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.05</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.07</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -445,6 +445,25 @@ body.light-mode .ip-group{background:#ffffff;}
   <button class="page-nav-btn"        id="navSettings"     onclick="setPage('settings')">SETTINGS</button>
   <button class="page-nav-btn"        id="navIntegrations" onclick="setPage('integrations')">INTEGRATIONS</button>
 </nav>
+
+<!-- ── Live progress bar ──────────────────────────────────────────────────── -->
+<div id="liveProgressBar" style="display:none;position:sticky;top:0;z-index:99;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 20px;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="flex:1;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+        <span id="lpName" style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text);font-family:var(--sans);"></span>
+        <span style="display:flex;gap:12px;align-items:center;">
+          <span id="lpCounts" style="font-size:11px;color:var(--muted);font-family:var(--mono);"></span>
+          <span id="lpPct" style="font-size:13px;font-weight:800;color:var(--accent);font-family:var(--mono);min-width:40px;text-align:right;"></span>
+          <span id="lpEta" style="font-size:11px;color:var(--muted);font-family:var(--mono);min-width:70px;"></span>
+        </span>
+      </div>
+      <div style="height:5px;background:var(--border);border-radius:999px;overflow:hidden;">
+        <div id="lpFill" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));border-radius:999px;transition:width .4s ease;width:0%"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="appPage">
 <div class="app">
@@ -512,9 +531,16 @@ body.light-mode .ip-group{background:#ffffff;}
     <div class="ph">⬡ CONFIG</div>
     <div class="pb">
       <div class="src-ind" id="srcInd">No list selected</div>
+      <div id="preRunEstimate" style="display:none;font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+        <span style="font-weight:700;color:var(--text);font-family:var(--mono)" id="preRunEstMB">—</span>
+        <span id="preRunEstDetail" style="flex:1">estimated data usage</span>
+        <span style="color:var(--accent);font-size:10px;font-weight:600" id="preRunEstCount"></span>
+      </div>
       <label>TEST ENDPOINT URL</label>
       <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting"
         title="ip-api with full fields — required for residential/DC/mobile detection.">
+      <label>TARGET URL <span style="font-weight:400;color:var(--muted)">(optional — tested in parallel, e.g. walmart.com/robots.txt)</span></label>
+      <input type="text" id="targetUrl" value="http://www.walmart.com/robots.txt" placeholder="http://www.walmart.com/robots.txt" title="Secondary target tested alongside ip-api. Proxies that fail this URL get a heavy score penalty.">
       <div class="row2">
         <div><label>CONCURRENCY</label><input type="number" id="concurrency" value="150" min="10" max="500"></div>
         <div><label>TIMEOUT (s)</label><input type="number" id="timeout" value="10" min="1" max="60" step=".5"></div>
@@ -676,11 +702,15 @@ body.light-mode .ip-group{background:#ffffff;}
     <div class="ph">⬡ RESULTS — <span id="resName"></span>
       <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="resMeta"></span>
     </div>
-    <div class="stats-row">
+    <div class="stats-row" id="rStatsRow" style="grid-template-columns:repeat(7,1fr)">
       <div class="stat"><div class="stat-v" id="rTotal">—</div><div class="stat-l">TESTED</div></div>
       <div class="stat"><div class="stat-v g" id="rPassed">—</div><div class="stat-l">PASSED</div></div>
       <div class="stat"><div class="stat-v r" id="rFailed">—</div><div class="stat-l">FAILED</div></div>
       <div class="stat"><div class="stat-v" id="rRate">—</div><div class="stat-l">PASS RATE</div></div>
+      <div class="stat"><div class="stat-v" id="rDataUsed" style="font-size:13px">—</div><div class="stat-l">DATA USED</div></div>
+      <div class="stat"><div class="stat-v" id="rPxHits" style="font-size:13px">—</div><div class="stat-l">PX HITS</div></div>
+      <div class="stat"><div class="stat-v" id="rHttpbinPass" style="font-size:13px">—</div><div class="stat-l">HTTPBIN</div></div>
+      <div class="stat" id="rTargetStat" style="display:none"><div class="stat-v" id="rTargetPass" style="font-size:13px">—</div><div class="stat-l">TARGET PASS</div></div>
     </div>
     <!-- Single run IP analysis -->
     <div id="jobAnalysisPanel" style="display:none">
@@ -703,6 +733,23 @@ body.light-mode .ip-group{background:#ffffff;}
       <button class="btn btn-out btn-sm" id="resCopyBtn" onclick="copyJob()">⎘ COPY TOP 1000</button>
       <button class="btn btn-out btn-sm" onclick="exportJob()">⬇ TXT</button>
       <button class="btn btn-out btn-sm" onclick="downloadJobDebug()">AI DEBUG</button>
+    </div>
+    <!-- Elite filter pipeline -->
+    <div style="border-top:1px solid var(--border);padding:12px 16px;background:rgba(0,0,0,.15);">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--accent);margin-bottom:10px;">⬡ ELITE FILTER PIPELINE</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+        <div><label style="font-size:10px;margin-bottom:3px">MIN SCORE</label><input type="number" id="eliteMinScore" value="60" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+        <div><label style="font-size:10px;margin-bottom:3px">MAX LATENCY (ms)</label><input type="number" id="eliteMaxMs" value="800" min="100" max="5000" style="margin:0;padding:4px 8px;font-size:12px"></div>
+        <div><label style="font-size:10px;margin-bottom:3px">MAX PER ASN</label><input type="number" id="eliteMaxAsn" value="5" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+        <div><label style="font-size:10px;margin-bottom:3px">MAX PER CITY</label><input type="number" id="eliteMaxCity" value="3" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeDC" checked> Exclude datacenter</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludePX" checked> Exclude PX hits</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteDedupeIP" checked> Dedupe by egress IP</label>
+        <button class="btn btn-sm" style="margin-left:auto;padding:5px 18px" onclick="eliteCopy()">⬡ ELITE COPY</button>
+        <span id="eliteCopyCount" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+      </div>
     </div>
   </div>
 
@@ -845,6 +892,24 @@ body.light-mode .ip-group{background:#ffffff;}
   </div>
 
   <div class="panel settings-section">
+    <div class="ph">⬡ DATA USAGE ESTIMATOR</div>
+    <div class="pb">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Estimates are automatically calibrated after each completed test run. Run at least one test to enable this tool.</div>
+      <div class="row2" style="align-items:end;gap:12px">
+        <div>
+          <label>PROXY COUNT TO ESTIMATE</label>
+          <input type="number" id="estimateN" value="1000" min="1" style="margin-bottom:0" oninput="updateEstimate()">
+        </div>
+        <div>
+          <label>ESTIMATED DATA USAGE</label>
+          <div id="estimateResult" style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent);padding:7px 0;line-height:1">—</div>
+        </div>
+      </div>
+      <div id="estimateDetails" style="margin-top:10px;font-size:11px;color:var(--muted);font-family:var(--mono)"></div>
+    </div>
+  </div>
+
+  <div class="panel settings-section">
     <div class="ph">⬡ DEBUG LOG
       <span style="margin-left:auto;display:flex;gap:7px;">
         <button class="btn btn-out btn-sm" onclick="copyDbgLog()">⎘ COPY LOGS</button>
@@ -970,10 +1035,43 @@ function setMode(m){
 function getLists(){ try{return JSON.parse(localStorage.getItem('proxyLists')||'{}');}catch{return{};} }
 function setLists(l){ localStorage.setItem('proxyLists',JSON.stringify(l)); }
 function countLines(t){ return t.split('\n').filter(function(l){return l.trim()&&!l.trim().startsWith('#');}).length; }
+function formatBytes(b){ if(!b||b===0)return '0 B'; if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(2)+' MB'; }
+
+async function updateEstimate(){
+  var n=parseInt(document.getElementById('estimateN').value)||1000;
+  var resEl=document.getElementById('estimateResult');
+  var detEl=document.getElementById('estimateDetails');
+  try{
+    var r=await fetch(API+'/api/estimate?proxies='+n);
+    if(!r.ok){ var e=await r.json(); resEl.textContent='—'; detEl.textContent=e.error||'No data yet.'; return; }
+    var d=await r.json();
+    resEl.textContent=d.estimated_mb+' MB';
+    detEl.textContent='~'+d.avg_bytes_per_proxy.toLocaleString()+' bytes/proxy · '+d.estimated_kb.toLocaleString()+' KB total · calibrated from '+d.calibrated_from+' test'+(d.calibrated_from!==1?'s':'');
+  }catch(e){ resEl.textContent='—'; detEl.textContent='Could not fetch estimate.'; }
+}
 function countPaste(){
   var n=countLines(document.getElementById('pasteArea').value);
   var el=document.getElementById('pasteCounter');
   el.textContent=n.toLocaleString()+' proxies'; el.className='pcnt'+(n?' has':'');
+  updatePreRunEstimate(n);
+}
+async function updatePreRunEstimate(n){
+  var wrap=document.getElementById('preRunEstimate');
+  var mbEl=document.getElementById('preRunEstMB');
+  var detEl=document.getElementById('preRunEstDetail');
+  var cntEl=document.getElementById('preRunEstCount');
+  if(!n||n<1){wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  cntEl.textContent=n.toLocaleString()+' proxies';
+  mbEl.textContent='...';
+  detEl.textContent='estimating...';
+  try{
+    var r=await fetch(API+'/api/estimate?proxies='+n);
+    if(!r.ok){mbEl.textContent='—';detEl.textContent='Run a test first to calibrate.';return;}
+    var d=await r.json();
+    mbEl.textContent=d.estimated_mb+' MB';
+    detEl.textContent='~'+d.avg_bytes_per_proxy.toLocaleString()+' bytes/proxy · from '+d.calibrated_from+' run'+(d.calibrated_from!==1?'s':'');
+  }catch(e){mbEl.textContent='—';detEl.textContent='Run a test first to calibrate.';}
 }
 function persistList(name,text,proxyType,groupId){
   var lists=getLists(), id='list_'+Date.now(), n=countLines(text);
@@ -1093,16 +1191,20 @@ function useSource(type){
     if(!text){toast('Paste proxies first.',true);return;}
     var name=document.getElementById('pasteName').value.trim()||'Pasted List';
     activeSource={type:'paste',name,text};
-    ind.textContent='✓ '+name+' — '+countLines(text).toLocaleString()+' proxies'; ind.className='src-ind active';
+    var n=countLines(text);
+    ind.textContent='✓ '+name+' — '+n.toLocaleString()+' proxies'; ind.className='src-ind active';
+    updatePreRunEstimate(n);
   } else if(type==='file'){
     if(!selectedFile){toast('Select a file first.',true);return;}
     activeSource={type:'file',name:selectedFile.name,file:selectedFile};
     ind.textContent='✓ '+selectedFile.name; ind.className='src-ind active';
+    selectedFile.text().then(function(t){updatePreRunEstimate(countLines(t));});
   } else if(type==='saved'){
     if(!selectedSavedId){toast('Select a list first.',true);return;}
     var l=getLists()[selectedSavedId];
     activeSource={type:'saved',name:l.name,text:l.text};
     ind.textContent='✓ '+l.name+' — '+l.count.toLocaleString()+' proxies'; ind.className='src-ind active';
+    updatePreRunEstimate(l.count);
   }
   toast('Ready: '+activeSource.name);
 }
@@ -1110,6 +1212,7 @@ function useSource(type){
 function buildFD(){
   var fd=new FormData();
   fd.append('test_url',document.getElementById('testUrl').value||'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting');
+  fd.append('target_url',(document.getElementById('targetUrl')||{value:''}).value||'');
   fd.append('concurrency',document.getElementById('concurrency').value);
   fd.append('timeout',document.getElementById('timeout').value);
   fd.append('retries',document.getElementById('retries').value);
@@ -1207,10 +1310,59 @@ async function refreshSessSelect(){
 }
 
 // ── Polling ────────────────────────────────────────────────────────────────
+function updateLiveProgress(allJobs){
+  var bar=document.getElementById('liveProgressBar');
+  var running=allJobs.filter(function(j){return j.status==='running'||j.status==='queued';});
+  if(!running.length){bar.style.display='none';return;}
+  bar.style.display='';
+  // Show the most active job (furthest along)
+  var j=running.slice().sort(function(a,b){return (b.progress_pct||0)-(a.progress_pct||0);})[0];
+  var pct=Math.round(j.progress_pct||0);
+  var passed=j.passed||0, failed=j.failed||0, tested=j.tested||0, total=j.total||0;
+  var label=esc(j.list_name||j.job_id);
+  if(running.length>1) label+=' <span style="color:var(--muted)">+' +(running.length-1)+' more</span>';
+  document.getElementById('lpName').innerHTML=label;
+  document.getElementById('lpFill').style.width=pct+'%';
+  document.getElementById('lpPct').textContent=pct+'%';
+  var passRate=tested>0?Math.round(passed/tested*100)+'% pass':'';
+  document.getElementById('lpCounts').textContent=tested.toLocaleString()+'/'+total.toLocaleString()+(passRate?' · '+passRate:'');
+  var etaTxt=j.status==='running'&&j.eta_sec>0
+    ?(j.eta_sec<60?j.eta_sec+'s left':Math.ceil(j.eta_sec/60)+'m left')
+    :(j.status==='queued'?'queued':'');
+  document.getElementById('lpEta').textContent=etaTxt;
+}
+
+// SSE source for real-time job progress
+var sseSource=null;
+function startSSE(){
+  if(sseSource){sseSource.close();sseSource=null;}
+  try{
+    sseSource=new EventSource(API+'/api/events');
+    sseSource.onmessage=function(e){
+      try{
+        var allJobs=JSON.parse(e.data);
+        updateLiveProgress(allJobs);
+        renderJobs(allJobs.filter(function(j){return !j.session_id;}));
+        if(activeJobId){
+          var aj=allJobs.find(function(j){return j.job_id===activeJobId;});
+          if(aj&&aj.status==='done'&&document.getElementById('resPanel').style.display==='none') loadJobResults(activeJobId);
+        }
+      }catch(err){}
+    };
+    sseSource.onerror=function(){
+      sseSource.close(); sseSource=null;
+      // Fallback to polling if SSE fails
+      if(!pollTimer) pollTimer=setInterval(doRefresh,2000);
+    };
+  }catch(e){
+    if(!pollTimer) pollTimer=setInterval(doRefresh,2000);
+  }
+}
 function startPolling(){
   if(pollTimer)clearInterval(pollTimer);
   doRefresh();
-  pollTimer=setInterval(doRefresh,2000);
+  startSSE();
+  pollTimer=setInterval(doRefresh,5000); // slower fallback polls for sessions
 }
 async function doRefresh(){
   try{
@@ -1226,6 +1378,7 @@ async function doRefresh(){
     var busy=allJobs.some(function(j){return j.status==='running'||j.status==='queued';})
            ||allSess.some(function(s){return s.status==='running';});
     if(!busy&&pollTimer){clearInterval(pollTimer);pollTimer=null;}
+    updateLiveProgress(allJobs);
     // Cross-session comparison (only when 2+ sessions exist)
     if(allSess.length>=2){
       try{
@@ -1529,6 +1682,11 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +'<span class="ip-chip">'+esc(provider)+'</span>'
         +'<span class="ip-chip">'+esc(org)+'</span>'
         +'<span class="ip-chip">'+esc(loc)+'</span>'
+        +(a.httpbin_pass===true?'<span class="ip-chip score">httpbin ✓</span>':a.httpbin_pass===false?'<span class="ip-chip bad">httpbin ✗</span>':'')
+        +(a.target_pass===true?'<span class="ip-chip score">target ✓</span>':a.target_pass===false?'<span class="ip-chip bad">target ✗</span>':'')
+        +(a.target_ms!=null?'<span class="ip-chip">'+(a.target_pass===false?'<s>':'')+a.target_ms+'ms tgt'+(a.target_pass===false?'</s>':'')+'</span>':'')
+        +(a.edge_rtt!=null?'<span class="ip-chip">'+a.edge_rtt+'ms edge</span>':'')
+        +(a.target_px?'<span class="ip-chip bad">PX challenge</span>':'')
         +(a.ip_info&&a.ip_info.mobile?'<span class="ip-chip score">mobile</span>':'')
         +(a.ip_info&&a.ip_info.hosting?'<span class="ip-chip bad">hosting</span>':'')
         +(a.ip_info&&a.ip_info.proxy?'<span class="ip-chip bad">proxy-flagged</span>':'')
@@ -1886,6 +2044,28 @@ async function loadJobResults(jobId){
   document.getElementById('rPassed').textContent=s.passed.toLocaleString();
   document.getElementById('rFailed').textContent=s.failed.toLocaleString();
   document.getElementById('rRate').textContent=s.total>0?((s.passed/s.total)*100).toFixed(1)+'%':'—';
+  if(s.data_usage){
+    document.getElementById('rDataUsed').textContent=formatBytes(s.data_usage.total_bytes);
+    var pxCnt=s.data_usage.px_challenge_count||0;
+    document.getElementById('rPxHits').textContent=pxCnt>0?pxCnt+' ('+s.data_usage.px_challenge_pct+'%)':'0';
+    document.getElementById('rPxHits').style.color=pxCnt>0?'var(--warn)':'';
+    var hbPct=s.data_usage.httpbin_pass_pct;
+    document.getElementById('rHttpbinPass').textContent=hbPct!=null?hbPct+'%':'—';
+    document.getElementById('rHttpbinPass').style.color=hbPct>=80?'var(--accent)':hbPct>=50?'var(--warn)':'var(--fail)';
+    var hasTarget=s.data_usage.target_tested>0;
+    document.getElementById('rTargetStat').style.display=hasTarget?'':'none';
+    document.getElementById('rStatsRow').style.gridTemplateColumns=hasTarget?'repeat(8,1fr)':'repeat(7,1fr)';
+    if(hasTarget){
+      var tPct=s.data_usage.target_pass_pct;
+      document.getElementById('rTargetPass').textContent=tPct+'%';
+      document.getElementById('rTargetPass').style.color=tPct>=80?'var(--accent)':tPct>=50?'var(--warn)':'var(--fail)';
+    }
+  }else{
+    document.getElementById('rDataUsed').textContent='—';
+    document.getElementById('rPxHits').textContent='—';
+    document.getElementById('rHttpbinPass').textContent='—';
+    document.getElementById('rTargetStat').style.display='none';
+  }
   if(r.ip_analysis) renderAnalysis(r.ip_analysis,'jobAnalysisPanel');
   renderJobResults();
   document.getElementById('resPanel').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1915,6 +2095,29 @@ function exportJob(){
   downloadTextFile('proxy-job-export-'+provider+'.txt',list);
 }
 function downloadJobDebug(){ if(activeJobId) window.open(API+'/api/jobs/'+activeJobId+'/debug-prompt','_blank'); }
+async function eliteCopy(){
+  if(!activeJobId){toast('No active job.',true);return;}
+  var minScore  = document.getElementById('eliteMinScore').value||'60';
+  var maxMs     = document.getElementById('eliteMaxMs').value||'800';
+  var maxAsn    = document.getElementById('eliteMaxAsn').value||'5';
+  var maxCity   = document.getElementById('eliteMaxCity').value||'3';
+  var exDC      = document.getElementById('eliteExcludeDC').checked?'true':'false';
+  var exPX      = document.getElementById('eliteExcludePX').checked?'true':'false';
+  var dedupeIP  = document.getElementById('eliteDedupeIP').checked?'true':'false';
+  var url=API+'/api/jobs/'+activeJobId+'/elite'
+    +'?min_score='+minScore+'&max_ms='+maxMs
+    +'&exclude_dc='+exDC+'&exclude_px='+exPX+'&dedupe_ip='+dedupeIP
+    +'&max_per_asn='+maxAsn+'&max_per_city='+maxCity;
+  try{
+    var r=await fetch(url);
+    var text=(await r.text()).trim();
+    var lines=text?text.split('\n').filter(function(l){return l.trim();}):[];
+    document.getElementById('eliteCopyCount').textContent=lines.length?lines.length.toLocaleString()+' proxies copied':'0 proxies matched filters';
+    if(!lines.length){toast('No proxies matched elite filters.',true);return;}
+    await navigator.clipboard.writeText(text);
+    toast('Copied '+lines.length.toLocaleString()+' elite proxies');
+  }catch(e){toast('Copy failed: '+e.message,true);}
+}
 async function deleteJob(jobId){
   await fetch(API+'/api/jobs/'+jobId,{method:'DELETE'});
   if(activeJobId===jobId){activeJobId=null;document.getElementById('resPanel').style.display='none';}
@@ -2866,7 +3069,7 @@ startPolling();
 loadSessionGroups();
 intTypeChanged(); // init integration extra fields
 renderIntegrationList();
-dbgLog('Proxy Tester v1.05 started');
+dbgLog('Proxy Tester v1.07 started');
 </script>
 </body>
 </html>

@@ -8,7 +8,11 @@ const path = require('path');
 const url  = require('url');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.05';
+const APP_VERSION = '1.07';
+
+// When packaged as an asar, __dirname is read-only.
+// Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
+const DATA_DIR = process.env.APP_DATA_DIR || __dirname;
 
 const jobs      = {};
 const sessions  = {};
@@ -173,6 +177,49 @@ const RESIDENTIAL_KEYWORDS = [
   'telekomunikacja','telekomunikace',
 ];
 
+// ── PerimeterX / bot-challenge response markers ───────────────────────────────
+const PX_MARKERS = [
+  '_pxhd', 'px-captcha', 'press & hold', '_pxde', 'pxchallenge',
+  'px.init', 'perimeterx', '_px2', 'pxi/', 'human challenge',
+];
+
+// Always-on parallel test URLs (in addition to ip-api and optional target)
+const HTTPBIN_URL = 'http://httpbin.org/ip';
+
+// Known datacenter ASN numbers for -20 score penalty
+const DATACENTER_ASN_NUMS = new Set([
+  13335,  // Cloudflare
+  15169,  // Google
+  16509,  // Amazon AWS
+  14618,  // Amazon AWS
+  8075,   // Microsoft Azure
+  36351,  // SoftLayer/IBM Cloud
+  63949,  // Linode/Akamai
+  14061,  // DigitalOcean
+  20473,  // Choopa/Vultr
+  24940,  // Hetzner
+  16276,  // OVH
+  12876,  // Online.net
+  3223,   // Voxility
+  9009,   // M247
+  396982, // Google Cloud
+  15133,  // Edgecast/Verizon
+  20940,  // Akamai
+  54113,  // Fastly
+  32934,  // Facebook/Meta
+  2906,   // Netflix
+  46489,  // Twitch
+  55256,  // StackPath
+  7018,   // AT&T (backbone, not residential)
+  7922,   // Comcast (backbone transit, not retail)
+]);
+
+function extractAsnNum(asStr) {
+  if (!asStr) return null;
+  var m = String(asStr).match(/AS(\d+)/i);
+  return m ? parseInt(m[1]) : null;
+}
+
 function classifyIP(ipInfo) {
   if (!ipInfo || !ipInfo.query) return 'unknown';
 
@@ -274,36 +321,78 @@ function decodeChunked(body) {
   return result || body;
 }
 
-// ── Core proxy test — captures response body for IP analysis ─────────────────
+// ── TCP CONNECT timing — measures round-trip time through the proxy to target ──
+function tcpPingThrough(proxy, host, port, timeoutMs) {
+  return new Promise(function(resolve) {
+    var start = Date.now();
+    var settled = false;
+    function done(rtt) { if (!settled) { settled = true; resolve(rtt); } }
+    var sock = net.createConnection({ host: proxy.host, port: proxy.port });
+    var timer = setTimeout(function() { sock.destroy(); done(null); }, timeoutMs);
+    sock.setTimeout(timeoutMs);
+    sock.on('timeout', function() { sock.destroy(); clearTimeout(timer); done(null); });
+    sock.on('error',   function() { sock.destroy(); clearTimeout(timer); done(null); });
+    sock.on('connect', function() {
+      var auth = proxy.username
+        ? ('Proxy-Authorization: Basic ' + Buffer.from(proxy.username + ':' + proxy.password).toString('base64') + '\r\n')
+        : '';
+      var req = 'CONNECT ' + host + ':' + port + ' HTTP/1.1\r\nHost: ' + host + ':' + port + '\r\n' + auth + '\r\n';
+      sock.write(req);
+      var buf = '';
+      sock.on('data', function(c) {
+        buf += c.toString('binary');
+        if (buf.indexOf('\r\n\r\n') === -1) return;
+        clearTimeout(timer);
+        sock.destroy();
+        done(/^HTTP\/1\.[01] 200/.test(buf) ? Date.now() - start : null);
+      });
+    });
+  });
+}
+
+// ── Core proxy test — captures response body, bytes used, and PX markers ──────
 function testProxyOnce(proxy, testUrl, timeoutMs) {
   return new Promise(function(resolve) {
     const start = Date.now();
     let settled = false;
-    function finish(ok, body) {
+    function finish(ok, body, bytesSent, bytesReceived) {
       if (settled) return;
       settled = true;
-      resolve({ ok, ms: Date.now() - start, body: body || null });
+      var px = false;
+      if (body) {
+        var bl = body.toLowerCase();
+        for (var pi = 0; pi < PX_MARKERS.length; pi++) {
+          if (bl.includes(PX_MARKERS[pi])) { px = true; break; }
+        }
+      }
+      resolve({ ok, ms: Date.now() - start, body: body || null,
+                bytes_sent: bytesSent || 0, bytes_received: bytesReceived || 0,
+                px_challenge: px });
     }
     const parsed     = new URL(testUrl);
     const isHttps    = parsed.protocol === 'https:';
     const targetHost = parsed.hostname;
     const targetPort = parseInt(parsed.port) || (isHttps ? 443 : 80);
-    const timer = setTimeout(function() { sock.destroy(); finish(false); }, timeoutMs);
+    const timer = setTimeout(function() { sock.destroy(); finish(false, null, 0, 0); }, timeoutMs);
     const sock  = net.createConnection({ host: proxy.host, port: proxy.port });
     sock.setTimeout(timeoutMs);
-    sock.on('timeout', function() { sock.destroy(); clearTimeout(timer); finish(false); });
-    sock.on('error',   function() { sock.destroy(); clearTimeout(timer); finish(false); });
+    sock.on('timeout', function() { sock.destroy(); clearTimeout(timer); finish(false, null, 0, 0); });
+    sock.on('error',   function() { sock.destroy(); clearTimeout(timer); finish(false, null, 0, 0); });
     sock.on('connect', function() {
       var auth = proxy.username
         ? ('Proxy-Authorization: Basic ' + Buffer.from(proxy.username + ':' + proxy.password).toString('base64') + '\r\n')
         : '';
       if (isHttps) {
-        sock.write('CONNECT ' + targetHost + ':' + targetPort + ' HTTP/1.1\r\nHost: ' + targetHost + ':' + targetPort + '\r\n' + auth + '\r\n');
+        var connectReq = 'CONNECT ' + targetHost + ':' + targetPort + ' HTTP/1.1\r\nHost: ' + targetHost + ':' + targetPort + '\r\n' + auth + '\r\n';
+        sock.write(connectReq);
+        var bytesSentH = Buffer.byteLength(connectReq);
+        var bytesReceivedH = 0;
         var buf = '';
         sock.on('data', function(c) {
           buf += c.toString('binary');
+          bytesReceivedH += c.length;
           if (buf.indexOf('\r\n\r\n') === -1) return;
-          clearTimeout(timer); sock.destroy(); finish(/^HTTP\/1\.[01] 200/.test(buf));
+          clearTimeout(timer); sock.destroy(); finish(/^HTTP\/1\.[01] 200/.test(buf), null, bytesSentH, bytesReceivedH);
         });
       } else {
         // Use HTTP/1.0 to avoid chunked encoding from the origin server.
@@ -311,8 +400,10 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
         var getReq = 'GET ' + testUrl + ' HTTP/1.0\r\nHost: ' + targetHost
           + '\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n' + auth + '\r\n';
         sock.write(getReq);
+        var bytesSentG = Buffer.byteLength(getReq, 'latin1');
         var chunks = [];
-        sock.on('data', function(c) { chunks.push(c); });
+        var bytesReceivedG = 0;
+        sock.on('data', function(c) { chunks.push(c); bytesReceivedG += c.length; });
         sock.on('end', function() {
           clearTimeout(timer);
           var raw = Buffer.concat(chunks).toString('latin1');
@@ -323,9 +414,9 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
           var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
           var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
           if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
-          finish(status >= 200 && status < 500, body);
+          finish(status >= 200 && status < 500, body, bytesSentG, bytesReceivedG);
         });
-        sock.on('error', function() { clearTimeout(timer); finish(false); });
+        sock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSentG, 0); });
       }
     });
   });
@@ -344,35 +435,108 @@ function parseIpApiResponse(body) {
   } catch (e) { return null; }
 }
 
-async function testProxy(proxy, testUrl, timeoutMs, retries) {
-  const attempts = [];
+async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
+  var ipapiAttempts = [], httpbinAttempts = [], targetAttempts = [];
+  var totalBytesSent = 0, totalBytesRecv = 0;
+
   for (var i = 0; i < retries; i++) {
-    attempts.push(await testProxyOnce(proxy, testUrl, timeoutMs));
+    // Always run ip-api + httpbin in parallel; optionally add target
+    var tasks = [
+      testProxyOnce(proxy, testUrl, timeoutMs),      // ip-api
+      testProxyOnce(proxy, HTTPBIN_URL, timeoutMs),  // httpbin
+    ];
+    if (targetUrl) tasks.push(testProxyOnce(proxy, targetUrl, timeoutMs));
+
+    var results = await Promise.all(tasks);
+    var ipapi   = results[0];
+    var httpbin = results[1];
+    var tgt     = targetUrl ? results[2] : null;
+
+    ipapiAttempts.push(ipapi);
+    httpbinAttempts.push(httpbin);
+    if (tgt) targetAttempts.push(tgt);
+
+    totalBytesSent += (ipapi.bytes_sent||0) + (httpbin.bytes_sent||0) + (tgt ? (tgt.bytes_sent||0) : 0);
+    totalBytesRecv += (ipapi.bytes_received||0) + (httpbin.bytes_received||0) + (tgt ? (tgt.bytes_received||0) : 0);
   }
-  const good = attempts.filter(function(a) { return a.ok; });
-  if (!good.length) {
+
+  var goodIpapi   = ipapiAttempts.filter(function(a){ return a.ok; });
+  var goodHttpbin = httpbinAttempts.filter(function(a){ return a.ok; });
+  var goodTarget  = targetAttempts.filter(function(a){ return a.ok; });
+
+  var ipapiPass   = goodIpapi.length > 0;
+  var httpbinPass = goodHttpbin.length > 0;
+  var targetTested = targetAttempts.length > 0;
+  var targetPass   = targetTested ? goodTarget.length > 0 : null;
+
+  var pxChallenge = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts)
+    .some(function(a){ return a.px_challenge; });
+  var targetPx = targetAttempts.some(function(a){ return a.px_challenge; });
+
+  var targetMs = (targetTested && goodTarget.length)
+    ? Math.round(goodTarget.reduce(function(s,a){return s+a.ms;},0) / goodTarget.length) : null;
+
+  // Use ip-api latency as the primary timing signal
+  var allGood = goodIpapi.concat(goodHttpbin);
+  if (!allGood.length) {
     return { host:proxy.host, port:proxy.port, protocol:proxy.protocol,
              username:proxy.username, password:proxy.password,
              status:'fail', avg_ms:null, min_ms:null, success_rate:0, score:0,
-             egress_ip:null, ip_info:null, ip_type:'unknown' };
+             egress_ip:null, ip_info:null, ip_type:'unknown',
+             httpbin_pass:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
+             bytes_sent:totalBytesSent, bytes_received:totalBytesRecv,
+             px_challenge:pxChallenge, edge_rtt:null };
   }
-  const lats = good.map(function(a) { return a.ms; });
-  const avg  = lats.reduce(function(a,b){return a+b;},0) / lats.length;
-  const min  = Math.min.apply(null, lats);
-  const rate = good.length / retries;
-  // Try to get IP info from the last successful attempt
+
+  var lats = goodIpapi.length ? goodIpapi.map(function(a){return a.ms;}) : goodHttpbin.map(function(a){return a.ms;});
+  var avg  = lats.reduce(function(a,b){return a+b;},0) / lats.length;
+  var min  = Math.min.apply(null, lats);
+  var rate = goodIpapi.length / retries;
+
   var ipInfo = null;
-  for (var j = good.length - 1; j >= 0; j--) {
-    ipInfo = parseIpApiResponse(good[j].body);
+  for (var j = goodIpapi.length - 1; j >= 0; j--) {
+    ipInfo = parseIpApiResponse(goodIpapi[j].body);
     if (ipInfo) break;
   }
   var ipType = classifyIP(ipInfo);
+  var asnNum = ipInfo ? extractAsnNum(ipInfo.as) : null;
+  var isDcAsn = asnNum !== null && DATACENTER_ASN_NUMS.has(asnNum);
+
+  // TCP edge RTT (async, non-blocking — fires after main tests)
+  var edgeRtt = null;
+  if (targetUrl) {
+    try {
+      var parsed = new URL(targetUrl);
+      var edgeHost = parsed.hostname;
+      var edgePort = parsed.port ? parseInt(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
+      edgeRtt = await tcpPingThrough(proxy, edgeHost, edgePort, Math.min(timeoutMs, 5000));
+    } catch(e) { edgeRtt = null; }
+  }
+
+  // Fork additive scoring formula
+  var score = 0;
+  if (targetTested && targetPass)  score += 50;
+  if (ipapiPass)                   score += 15;
+  if (httpbinPass)                 score += 10;
+  if (pxChallenge)                 score -= 30;
+  if (ipType === 'datacenter')     score -= 25;
+  if (isDcAsn)                     score -= 20;
+  // Latency bonus: +10 under 300ms, -10 over 800ms
+  if (avg <= 300)      score += 10;
+  else if (avg <= 500) score += 5;
+  else if (avg > 800)  score -= 10;
+  // Consistency bonus
+  if (rate >= 1.0)     score += 5;
+  else if (rate < 0.5) score -= 10;
+  // Clamp to 0..100
+  score = Math.max(0, Math.min(100, score));
+
   return {
     host:proxy.host, port:proxy.port, protocol:proxy.protocol,
     username:proxy.username, password:proxy.password,
     status:'pass', avg_ms:Math.round(avg), min_ms:Math.round(min),
     success_rate:Math.round(rate*1000)/1000,
-    score:Math.round(rate*(1000/(avg+1))*10000)/10000,
+    score,
     egress_ip:  ipInfo ? ipInfo.query : null,
     ip_info:    ipInfo ? { isp:ipInfo.isp, org:ipInfo.org, as:ipInfo.as,
                            asname:ipInfo.asname,
@@ -381,6 +545,10 @@ async function testProxy(proxy, testUrl, timeoutMs, retries) {
                            hosting:ipInfo.hosting,
                            proxy:ipInfo.proxy, mobile:ipInfo.mobile } : null,
     ip_type: ipType,
+    httpbin_pass: httpbinPass,
+    target_pass: targetPass, target_ms: targetMs, target_px: targetPx,
+    bytes_sent: totalBytesSent, bytes_received: totalBytesRecv,
+    px_challenge: pxChallenge, edge_rtt: edgeRtt,
   };
 }
 
@@ -395,10 +563,21 @@ async function runJob(jobId, proxies, config) {
     while (true) {
       const i = queue++;
       if (i >= total) break;
-      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries);
+      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries, config.target_url || '');
       results[i] = r; completed++;
       job.tested = completed;
       if (r.status === 'pass') job.passed++; else job.failed++;
+      if (r.px_challenge) job.px_challenge_count = (job.px_challenge_count || 0) + 1;
+      if (r.httpbin_pass !== undefined) {
+        job.httpbin_tested = (job.httpbin_tested || 0) + 1;
+        if (r.httpbin_pass) job.httpbin_passed = (job.httpbin_passed || 0) + 1;
+      }
+      if (r.target_pass !== null && r.target_pass !== undefined) {
+        job.target_tested = (job.target_tested || 0) + 1;
+        if (r.target_pass) job.target_passed = (job.target_passed || 0) + 1;
+      }
+      job.bytes_sent     = (job.bytes_sent     || 0) + (r.bytes_sent     || 0);
+      job.bytes_received = (job.bytes_received || 0) + (r.bytes_received || 0);
       job.progress_pct = Math.round(completed/total*1000)/10;
       const el = (Date.now()-job.startTime)/1000;
       job.elapsed_sec = Math.round(el*10)/10;
@@ -406,6 +585,22 @@ async function runJob(jobId, proxies, config) {
     }
   }
   await Promise.all(Array.from({ length: conc }, function() { return worker(); }));
+
+  var totalBytes = (job.bytes_sent || 0) + (job.bytes_received || 0);
+  job.data_usage = {
+    bytes_sent:          job.bytes_sent || 0,
+    bytes_received:      job.bytes_received || 0,
+    total_bytes:         totalBytes,
+    avg_bytes_per_proxy: completed > 0 ? Math.round(totalBytes / completed) : 0,
+    px_challenge_count:  job.px_challenge_count || 0,
+    px_challenge_pct:    completed > 0 ? Math.round((job.px_challenge_count || 0) / completed * 1000) / 10 : 0,
+    httpbin_tested:      job.httpbin_tested  || 0,
+    httpbin_passed:      job.httpbin_passed  || 0,
+    httpbin_pass_pct:    job.httpbin_tested  > 0 ? Math.round((job.httpbin_passed || 0) / job.httpbin_tested * 1000) / 10 : null,
+    target_tested:       job.target_tested  || 0,
+    target_passed:       job.target_passed  || 0,
+    target_pass_pct:     job.target_tested  > 0 ? Math.round((job.target_passed || 0) / job.target_tested * 1000) / 10 : null,
+  };
 
   const passed = results.filter(function(r){ return r && r.status==='pass'; });
 
@@ -424,10 +619,11 @@ async function runJob(jobId, proxies, config) {
   job.top_proxies = passed.slice(0, config.top_n);
   job.status = 'done'; job.progress_pct = 100; job.eta_sec = 0;
   if (job.session_id && sessions[job.session_id]) mergeRunIntoSession(job.session_id, jobId, results);
-  fs.mkdirSync(path.join(__dirname,'results'),{recursive:true});
+  fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
   fs.writeFileSync(path.join(__dirname,'results',jobId+'.json'),
     JSON.stringify({job_id:jobId,config,completed_at:new Date().toISOString(),
       stats:{total,passed:job.passed,failed:job.failed},
+      data_usage:job.data_usage,
       ip_analysis:job.ip_analysis,top_proxies:job.top_proxies},null,2));
 }
 
@@ -590,7 +786,7 @@ function mergeRunIntoSession(sessionId, jobId, results) {
     analyzed.map(function(a){ return { ip_type:a.ip_type, egress_ip:a.egress_ip, ip_info:a.ip_info, avg_ms:a.mean_lat }; })
   );
 
-  fs.mkdirSync(path.join(__dirname,'results'),{recursive:true});
+  fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
   fs.writeFileSync(path.join(__dirname,'results','session_'+sessionId+'.json'),
     JSON.stringify({session_id:sessionId,config:s.config,run_count:s.run_count,
       run_ids:s.run_ids,updated_at:s.updated_at,ip_analysis:s.ip_analysis,
@@ -654,7 +850,11 @@ function computeSessionAnalytics(s) {
       // Math.pow(consistency, 2.2): 100%→1.0, 80%→0.61, 67%→0.40, 50%→0.22
       var composite   = Math.round(Math.pow(consistency,2.2)*30 + spd*40 + uniqueScore*20 + tScore*10);
       return { proxy:a.proxy, egress_ip:a.egress_ip, ip_type:a.ip_type,
-               isp:a.ip_info?a.ip_info.isp:null, mean_lat:a.mean_lat,
+               isp:a.ip_info?a.ip_info.isp:null,
+               asn:a.ip_info?a.ip_info.as:null,
+               city:a.ip_info?a.ip_info.city:null,
+               country:a.ip_info?a.ip_info.country:null,
+               mean_lat:a.mean_lat,
                pass_count:a.pass_count, run_count:a.run_count,
                consistency_pct:Math.round(consistency*100),
                shared_by:crowding, composite_score:composite };
@@ -686,6 +886,23 @@ function computeSessionAnalytics(s) {
     crowded_ips:        crowdedIPs,
     composite_ranked:   compositeRanked.slice(0, 1000),
   };
+}
+
+// ── Diversity caps — limit how many proxies come from any single ASN or city ──
+// Works on both raw job results (p.ip_info) and composite_ranked entries (p.asn/p.city)
+function applyDiversityCaps(list, maxPerAsn, maxPerCity) {
+  if (!maxPerAsn && !maxPerCity) return list;
+  var asnCounts = {}, cityCounts = {};
+  return list.filter(function(p) {
+    var info = p.ip_info || null;
+    var asn  = info ? (info.as  || '__uk_asn')  : (p.asn   || '__uk_asn');
+    var city = info
+      ? ((info.city && info.country) ? (info.city + ',' + info.country) : '__uk_city')
+      : ((p.city    && p.country)    ? (p.city   + ',' + p.country)    : '__uk_city');
+    if (maxPerAsn)  { asnCounts[asn]   = (asnCounts[asn]   || 0) + 1; if (asnCounts[asn]   > maxPerAsn)  return false; }
+    if (maxPerCity) { cityCounts[city] = (cityCounts[city] || 0) + 1; if (cityCounts[city] > maxPerCity) return false; }
+    return true;
+  });
 }
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -935,13 +1152,63 @@ const server = http.createServer(async function(req,res){
 
   if(pathname==='/api/version') return jsonRes(res,{version:APP_VERSION});
 
+  // SSE real-time progress stream
+  if(pathname==='/api/events'&&method==='GET'){
+    res.writeHead(200,{
+      'Content-Type':'text/event-stream',
+      'Cache-Control':'no-cache',
+      'Connection':'keep-alive',
+      'Access-Control-Allow-Origin':'*',
+    });
+    function sendEvent(){
+      var snapshot=Object.values(jobs).map(function(j){
+        return{job_id:j.job_id,status:j.status,total:j.total,tested:j.tested,
+               passed:j.passed,failed:j.failed,progress_pct:j.progress_pct,
+               elapsed_sec:j.elapsed_sec,eta_sec:j.eta_sec,
+               list_name:j.list_name,session_id:j.session_id||null};
+      });
+      res.write('data: '+JSON.stringify(snapshot)+'\n\n');
+    }
+    sendEvent();
+    var iv=setInterval(sendEvent,500);
+    req.on('close',function(){clearInterval(iv);});
+    return;
+  }
+
+  // Data usage estimator — calibrated from recent completed jobs
+  if(pathname==='/api/estimate'&&method==='GET'){
+    var estN=parseInt(parsed.query.proxies||'1000');
+    if(isNaN(estN)||estN<1) estN=1000;
+    var recentJobs=Object.values(jobs)
+      .filter(function(j){return j.status==='done'&&j.data_usage&&j.data_usage.avg_bytes_per_proxy>0;})
+      .sort(function(a,b){return (b.startTime||0)-(a.startTime||0);})
+      .slice(0,5);
+    if(!recentJobs.length) return jsonRes(res,{error:'No completed tests yet — run at least one test to calibrate the estimate.'},400);
+    var avgBytesPerProxy=Math.round(
+      recentJobs.reduce(function(s,j){return s+j.data_usage.avg_bytes_per_proxy;},0)/recentJobs.length
+    );
+    var estimatedBytes=avgBytesPerProxy*estN;
+    return jsonRes(res,{
+      proxy_count:          estN,
+      avg_bytes_per_proxy:  avgBytesPerProxy,
+      estimated_bytes:      estimatedBytes,
+      estimated_kb:         Math.round(estimatedBytes/1024),
+      estimated_mb:         Math.round(estimatedBytes/1024/1024*100)/100,
+      calibrated_from:      recentJobs.length,
+    });
+  }
+
   // Jobs list
   if(pathname==='/api/jobs'&&method==='GET')
     return jsonRes(res,Object.values(jobs).map(function(j){
       return{job_id:j.job_id,status:j.status,total:j.total,tested:j.tested,
              passed:j.passed,failed:j.failed,progress_pct:j.progress_pct,
              elapsed_sec:j.elapsed_sec,eta_sec:j.eta_sec,
-             list_name:j.list_name,session_id:j.session_id||null};}));
+             list_name:j.list_name,session_id:j.session_id||null,
+             px_challenge_count:j.px_challenge_count||0,
+             httpbin_tested:j.httpbin_tested||0,httpbin_passed:j.httpbin_passed||0,
+             target_tested:j.target_tested||0,target_passed:j.target_passed||0,
+             data_usage:j.data_usage||null};}));
 
   // Create job
   if(pathname==='/api/jobs'&&method==='POST'){
@@ -952,6 +1219,7 @@ const server = http.createServer(async function(req,res){
     const proxies=parseProxies(fields.file.data.toString('utf-8'));
     if(!proxies.length) return jsonRes(res,{error:'No valid proxies found'},400);
     const config={test_url:fields.test_url||'http://ip-api.com/json',
+                  target_url:(fields.target_url||'').trim(),
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
@@ -981,14 +1249,42 @@ const server = http.createServer(async function(req,res){
     }
     if(sub==='/copy'&&method==='GET'){
       if(job.status!=='done') return jsonRes(res,{error:'Not complete'},400);
-      // Exclude datacenter and private from copy by default
-      var excludeDC = parsed.query.exclude_dc !== 'false';
-      var provider = (parsed.query.provider || '').trim().toLowerCase();
+      var excludeDC  = parsed.query.exclude_dc !== 'false';
+      var provider   = (parsed.query.provider || '').trim().toLowerCase();
+      var maxPerAsn  = parseInt(parsed.query.max_per_asn  || '0');
+      var maxPerCity = parseInt(parsed.query.max_per_city || '0');
       var list = job.top_proxies.filter(function(p){
         if (provider && providerNameFromEntry(p).toLowerCase() !== provider) return false;
         if (!excludeDC) return true;
         return p.ip_type !== 'datacenter' && p.ip_type !== 'private';
       });
+      list = applyDiversityCaps(list, maxPerAsn, maxPerCity);
+      res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});
+      return res.end(list.map(proxyLine).join('\n'));
+    }
+    if(sub==='/elite'&&method==='GET'){
+      if(job.status!=='done') return jsonRes(res,{error:'Not complete'},400);
+      var minScore   = parseInt(parsed.query.min_score  || '60');
+      var maxMs      = parseInt(parsed.query.max_ms     || '800');
+      var excludeDC  = parsed.query.exclude_dc  !== 'false';
+      var excludePX  = parsed.query.exclude_px  !== 'false';
+      var dedupeIP   = parsed.query.dedupe_ip   !== 'false';
+      var maxPerAsn  = parseInt(parsed.query.max_per_asn  || '5');
+      var maxPerCity = parseInt(parsed.query.max_per_city || '3');
+      var seenIPs    = new Set();
+      var list = job.top_proxies.filter(function(p){
+        if (p.score < minScore) return false;
+        if (p.avg_ms != null && p.avg_ms > maxMs) return false;
+        if (excludeDC && (p.ip_type==='datacenter'||p.ip_type==='private')) return false;
+        if (excludePX && p.px_challenge) return false;
+        if (p.target_pass === false) return false; // always drop target failures
+        if (dedupeIP && p.egress_ip) {
+          if (seenIPs.has(p.egress_ip)) return false;
+          seenIPs.add(p.egress_ip);
+        }
+        return true;
+      });
+      list = applyDiversityCaps(list, maxPerAsn, maxPerCity);
       res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});
       return res.end(list.map(proxyLine).join('\n'));
     }
@@ -1184,6 +1480,7 @@ const server = http.createServer(async function(req,res){
       try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
       const config={
         test_url:ov.test_url||'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting',
+        target_url:(ov.target_url||'').trim(),
         concurrency:parseInt(ov.concurrency||'150'),
         timeout:parseFloat(ov.timeout||'10'),
         retries:parseInt(ov.retries||'1'),
@@ -1268,6 +1565,7 @@ const server = http.createServer(async function(req,res){
     const proxies=parseProxies(fields.file.data.toString('utf-8'));
     if(!proxies.length) return jsonRes(res,{error:'No valid proxies found'},400);
     const config={test_url:fields.test_url||'http://ip-api.com/json',
+                  target_url:(fields.target_url||'').trim(),
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
@@ -1327,11 +1625,13 @@ const server = http.createServer(async function(req,res){
       var topN=parseInt(parsed.query.top_n||'1000');
       var minScore=parseInt(parsed.query.min_score||'0');
       var provider=(parsed.query.provider||'').trim().toLowerCase();
+      var maxPerAsn=parseInt(parsed.query.max_per_asn||'0');
+      var maxPerCity=parseInt(parsed.query.max_per_city||'0');
       var analytics=s.analytics||computeSessionAnalytics(s);
       var best=analytics.composite_ranked
         .filter(function(p){return p.composite_score>=minScore;})
-        .filter(function(p){return !provider || String(p.isp || 'Unknown ISP').toLowerCase() === provider;})
-        .slice(0,topN);
+        .filter(function(p){return !provider || String(p.isp || 'Unknown ISP').toLowerCase() === provider;});
+      best = applyDiversityCaps(best, maxPerAsn, maxPerCity).slice(0,topN);
       res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});
       return res.end(best.map(function(p){return proxyLine(p.proxy);}).join('\n'));
     }
@@ -1339,13 +1639,15 @@ const server = http.createServer(async function(req,res){
     if(method==='GET'&&sub==='/copy'){
       const topN=parseInt(parsed.query.top_n||'1000');
       const minPasses=parseInt(parsed.query.min_passes||s.run_count||'1');
-      var excludeDC = parsed.query.exclude_dc !== 'false';
-      var provider = (parsed.query.provider || '').trim().toLowerCase();
-      const best=s.analyzed
+      var excludeDC  = parsed.query.exclude_dc !== 'false';
+      var provider   = (parsed.query.provider || '').trim().toLowerCase();
+      var maxPerAsn  = parseInt(parsed.query.max_per_asn  || '0');
+      var maxPerCity = parseInt(parsed.query.max_per_city || '0');
+      var best=s.analyzed
         .filter(function(a){ return a.pass_count>=minPasses; })
         .filter(function(a){ return !provider || providerNameFromEntry(a).toLowerCase() === provider; })
-        .filter(function(a){ if(!excludeDC)return true; return a.ip_type!=='datacenter'&&a.ip_type!=='private'; })
-        .slice(0,topN);
+        .filter(function(a){ if(!excludeDC)return true; return a.ip_type!=='datacenter'&&a.ip_type!=='private'; });
+      best = applyDiversityCaps(best, maxPerAsn, maxPerCity).slice(0,topN);
       res.writeHead(200,{'Content-Type':'text/plain; charset=utf-8'});
       return res.end(best.map(function(a){return proxyLine(a.proxy);}).join('\n'));
     }
@@ -1382,18 +1684,16 @@ const server = http.createServer(async function(req,res){
   }
 
   if(pathname==='/'||pathname==='/index.html'){
-    res.writeHead(200,{'Content-Type':'text/html'});
-    return res.end(EMBEDDED_HTML);
+    res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});
+    var htmlPath=path.join(__dirname,'index.html');
+    return res.end(fs.existsSync(htmlPath)?fs.readFileSync(htmlPath,'utf8'):'<h1>index.html not found</h1>');
   }
   res.writeHead(404); res.end('Not found');
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-const EMBEDDED_HTML = fs.existsSync(path.join(__dirname,'index.html'))
-  ? fs.readFileSync(path.join(__dirname,'index.html'),'utf8')
-  : '<h1>index.html not found</h1>';
 
-fs.mkdirSync(path.join(__dirname,'results'),{recursive:true});
+fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
 
 server.on('error', function(err) {
   if (err.code === 'EADDRINUSE') {
