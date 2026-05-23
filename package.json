@@ -1,0 +1,68 @@
+{
+  "name": "proxy-tester",
+  "version": "1.05.0",
+  "description": "Proxy speed, consistency, and IP quality analyzer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-packager . \"Proxy Tester\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=dist --ignore=node_modules/.cache --ignore=build.ps1 --ignore=build.sh --ignore=BUILDING.md",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build": "npm run build:win"
+  },
+  "build": {
+    "appId": "com.proxytester.app",
+    "productName": "Proxy Tester",
+    "copyright": "Proxy Tester",
+    "asar": true,
+    "files": [
+      "main.js",
+      "server.js",
+      "index.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Proxy Tester ${version}",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.4",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  }
+}

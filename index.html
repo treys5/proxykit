@@ -1,0 +1,2872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROXY TESTER</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600;700&display=swap');
+:root{
+  --bg:#0d1117;--surface:#161b27;--surface2:#1c2333;
+  --border:#242e42;--border-hi:#2f3e58;
+  --accent:#818cf8;--accent-dim:rgba(129,140,248,.1);
+  --blue:#60a5fa;--purple:#c084fc;--warn:#ff9f43;--fail:#ff5c5c;
+  --gold:#ffd32a;--text:#dce8f5;--muted:#5d7290;
+  --residential:#60a5fa;--mobile:#c084fc;--datacenter:#ff5c5c;--flagged:#ff9f43;--unknown:#8090a8;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'Nunito',system-ui,sans-serif;
+  --r:14px;--r-sm:10px;--r-xs:7px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:999px;}
+::-webkit-scrollbar-thumb:hover{background:#3d5070;}
+
+/* ── Header ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;
+  border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,#111826 0%,var(--surface) 100%);
+  position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,0,0,.45);}
+.logo{font-size:14px;font-weight:800;letter-spacing:.16em;display:flex;align-items:center;gap:9px;
+  font-family:var(--sans);
+  background:linear-gradient(90deg,var(--accent) 0%,var(--blue) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;animation:pulse 2s ease-in-out infinite;flex-shrink:0;-webkit-text-fill-color:unset;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(129,140,248,.5);}50%{box-shadow:0 0 0 7px rgba(129,140,248,0);}}
+#clock{font-size:11px;color:var(--muted);font-family:var(--mono);}
+
+/* ── Page nav ── */
+.page-nav{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 20px;}
+.page-nav-btn{padding:10px 22px;font-family:var(--sans);font-size:12px;font-weight:700;letter-spacing:.08em;
+  background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+  color:var(--muted);cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.page-nav-btn:hover{color:var(--text);}
+.page-nav-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+/* ── Layout ── */
+.app{display:grid;grid-template-columns:380px 1fr;gap:16px;padding:16px;max-width:1600px;margin:0 auto;align-items:start;}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;
+  margin-bottom:14px;box-shadow:0 2px 16px rgba(0,0,0,.25),0 1px 3px rgba(0,0,0,.3);}
+.panel:last-child{margin-bottom:0;}
+.ph{padding:12px 16px;border-bottom:1px solid var(--border);font-size:11px;font-weight:800;
+  letter-spacing:.12em;color:var(--accent);display:flex;align-items:center;gap:8px;
+  font-family:var(--sans);
+  background:linear-gradient(90deg,rgba(129,140,248,.06) 0%,transparent 60%);}
+.pb{padding:14px 16px;}
+
+/* ── Forms ── */
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);
+  margin-bottom:5px;text-transform:uppercase;font-family:var(--sans);}
+input[type=text],input[type=number]{width:100%;background:var(--bg);border:1.5px solid var(--border);
+  border-radius:var(--r-sm);color:var(--text);font-family:var(--mono);font-size:12px;
+  padding:8px 11px;outline:none;transition:border-color .2s,box-shadow .2s;margin-bottom:12px;}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(129,140,248,.12);}
+textarea{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-sm);
+  color:var(--text);font-family:var(--mono);font-size:12px;padding:9px 11px;outline:none;
+  resize:vertical;line-height:1.6;transition:border-color .2s,box-shadow .2s;}
+textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(129,140,248,.12);}
+select{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r-sm);
+  color:var(--text);font-family:var(--sans);font-size:12px;padding:8px 11px;outline:none;
+  transition:border-color .2s;margin-bottom:12px;cursor:pointer;}
+select:focus{border-color:var(--accent);}
+
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg);}
+.tab{padding:9px 15px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;font-family:var(--sans);}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tc{display:none;padding:14px;}
+.tc.active{display:block;}
+
+.dz{border:2px dashed var(--border);border-radius:var(--r-sm);padding:22px;text-align:center;
+  cursor:pointer;transition:all .2s;position:relative;margin-bottom:10px;}
+.dz:hover,.dz.over{border-color:var(--accent);background:rgba(129,140,248,.04);}
+.dz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.dz-label{font-size:12px;color:var(--muted);}
+.dz-label span{color:var(--accent);}
+.file-info{font-size:11px;color:var(--accent);margin-top:5px;}
+
+.sli{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1.5px solid var(--border);
+  border-radius:var(--r-sm);margin-bottom:6px;background:var(--bg);cursor:pointer;transition:all .15s;}
+.sli:hover{border-color:var(--border-hi);background:var(--surface2);}
+.sli.selected{border-color:var(--accent);background:rgba(129,140,248,.05);}
+.sli-name{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sli-meta{font-size:10px;color:var(--muted);white-space:nowrap;}
+.ibt{background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 5px;border-radius:var(--r-xs);}
+.ibt:hover{color:var(--text);}
+.ibt.del:hover{color:var(--fail);}
+.src-ind{font-size:11px;color:var(--muted);padding:8px 12px;background:var(--bg);
+  border-radius:var(--r-sm);border:1.5px solid var(--border);margin-bottom:12px;}
+.src-ind.active{color:var(--accent);border-color:rgba(129,140,248,.4);background:rgba(129,140,248,.05);}
+.pcnt{font-size:11px;color:var(--muted);}
+.pcnt.has{color:var(--accent);}
+
+/* ── Buttons ── */
+.btn{width:100%;padding:10px 16px;background:linear-gradient(135deg,var(--accent),#a78bfa);
+  color:#0c0b24;border:none;border-radius:var(--r-sm);font-family:var(--sans);font-size:11px;
+  font-weight:800;letter-spacing:.1em;cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.btn:hover{filter:brightness(1.1);transform:translateY(-1px);box-shadow:0 6px 20px rgba(129,140,248,.3);}
+.btn:active{transform:translateY(0);filter:none;}
+.btn:disabled{background:var(--border);color:var(--muted);cursor:not-allowed;transform:none;filter:none;box-shadow:none;}
+.btn-sm{width:auto;padding:5px 14px;font-size:10px;}
+.btn-out{background:transparent;color:var(--accent);border:1.5px solid rgba(129,140,248,.4);}
+.btn-out:hover{background:rgba(129,140,248,.08);border-color:var(--accent);box-shadow:0 0 12px rgba(129,140,248,.15);transform:none;filter:none;}
+.btn-out:disabled{border-color:var(--border);color:var(--muted);box-shadow:none;}
+.btn-red{background:transparent;color:var(--fail);border:1.5px solid rgba(255,92,92,.4);}
+.btn-red:hover{background:rgba(255,92,92,.08);border-color:var(--fail);transform:none;filter:none;box-shadow:none;}
+.btn-row{display:flex;gap:7px;margin-top:10px;}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+.mode-row{display:flex;gap:7px;margin-bottom:12px;}
+.mode-btn{flex:1;padding:8px;background:transparent;border:1.5px solid var(--border);border-radius:var(--r-sm);
+  font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--muted);cursor:pointer;transition:all .2s;text-transform:uppercase;}
+.mode-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(129,140,248,.08);}
+
+/* ── Session & job cards ── */
+.sess-card{padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:all .15s;position:relative;}
+.sess-card:last-child{border-bottom:none;}
+.sess-card:hover{background:var(--surface2);}
+.sess-card.sel{background:rgba(129,140,248,.05);border-left:3px solid var(--accent);}
+.sess-card .toggle-hint{font-size:10px;color:var(--muted);position:absolute;right:14px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;}
+.sess-card:hover .toggle-hint{opacity:1;}
+.sess-name{font-size:13px;font-weight:700;margin-bottom:3px;}
+.sess-meta{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;}
+.g{color:var(--accent);}
+.r{color:var(--fail);}
+.o{color:var(--warn);}
+.job-card{padding:11px 16px;border-bottom:1px solid var(--border);}
+.job-card:last-child{border-bottom:none;}
+.job-top{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+.job-name{font-size:12px;font-weight:700;}
+.job-meta{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:5px;}
+.prog-wrap{height:3px;background:var(--bg);border-radius:999px;overflow:hidden;}
+.prog-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--blue));transition:width .4s;box-shadow:0 0 8px rgba(129,140,248,.35);}
+
+/* ── Badges ── */
+.badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:.04em;font-family:var(--sans);}
+.b-run{background:rgba(77,166,255,.12);color:var(--blue);border:1px solid rgba(77,166,255,.3);animation:blink 1.5s step-end infinite;}
+.b-done{background:rgba(129,140,248,.1);color:var(--accent);border:1px solid rgba(129,140,248,.25);}
+.b-q{background:rgba(255,159,67,.1);color:var(--warn);border:1px solid rgba(255,159,67,.25);}
+@keyframes blink{50%{opacity:.5;}}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);}
+.stat{background:var(--surface2);padding:12px 14px;text-align:center;}
+.stat-v{font-size:20px;font-weight:800;line-height:1;margin-bottom:3px;font-family:var(--sans);}
+.stat-v.g{color:var(--accent);}
+.stat-v.r{color:var(--fail);}
+.stat-v.gold{color:var(--gold);}
+.stat-l{font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;font-family:var(--sans);}
+
+/* ── IP Analysis ── */
+.analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin-bottom:1px;}
+.analysis-cell{background:var(--surface2);padding:14px 16px;}
+.analysis-title{font-size:10px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:10px;font-weight:700;font-family:var(--sans);}
+.quality-score{font-size:38px;font-weight:800;line-height:1;margin-bottom:4px;font-family:var(--sans);}
+.quality-label{font-size:11px;color:var(--muted);}
+.type-bars{display:flex;flex-direction:column;gap:6px;}
+.type-bar-row{display:flex;align-items:center;gap:8px;}
+.type-bar-label{font-size:10px;width:90px;color:var(--muted);flex-shrink:0;}
+.type-bar-track{flex:1;height:6px;background:var(--bg);border-radius:999px;overflow:hidden;}
+.type-bar-fill{height:100%;border-radius:999px;transition:width .6s;}
+.type-bar-val{font-size:10px;color:var(--text);width:40px;text-align:right;flex-shrink:0;}
+.asn-list{display:flex;flex-direction:column;gap:4px;max-height:120px;overflow-y:auto;}
+.asn-row{display:flex;align-items:center;gap:8px;font-size:10px;}
+.asn-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
+.asn-count{color:var(--text);flex-shrink:0;}
+.asn-bar{height:3px;background:var(--accent);border-radius:999px;flex-shrink:0;}
+.reuse-list{display:flex;flex-direction:column;gap:3px;max-height:120px;overflow-y:auto;}
+.reuse-row{display:flex;justify-content:space-between;font-size:10px;}
+.reuse-ip{color:var(--muted);font-family:var(--mono);}
+.reuse-count{color:var(--fail);}
+.alert-box{padding:10px 14px;border-radius:var(--r-sm);font-size:11px;margin-bottom:8px;border-left:3px solid;}
+.alert-warn{background:rgba(255,159,67,.07);border-color:var(--warn);color:var(--warn);}
+.alert-bad{background:rgba(255,92,92,.07);border-color:var(--fail);color:var(--fail);}
+.alert-good{background:rgba(129,140,248,.07);border-color:var(--accent);color:var(--accent);}
+
+/* ── Analytics ── */
+.analytics-section{border-top:1px solid var(--border);}
+.analytics-ph{padding:10px 16px;border-bottom:1px solid var(--border);font-size:10px;font-weight:800;
+  letter-spacing:.1em;color:var(--accent);display:flex;align-items:center;gap:8px;font-family:var(--sans);}
+.analytics-table{width:100%;border-collapse:collapse;font-size:11px;}
+.analytics-table th{text-align:left;padding:7px 12px;font-size:10px;letter-spacing:.06em;color:var(--muted);
+  background:var(--surface2);border-bottom:1px solid var(--border);white-space:nowrap;font-family:var(--sans);}
+.analytics-table td{padding:6px 12px;border-bottom:1px solid rgba(36,46,66,.7);white-space:nowrap;font-family:var(--mono);}
+.analytics-table tr:hover td{background:rgba(255,255,255,.02);}
+.crowd-chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:700;font-family:var(--sans);}
+.crowd-hi{background:rgba(255,92,92,.14);color:var(--fail);border:1px solid rgba(255,92,92,.35);}
+.crowd-md{background:rgba(255,159,67,.12);color:var(--warn);border:1px solid rgba(255,159,67,.3);}
+.crowd-lo{background:rgba(255,211,42,.1);color:var(--gold);border:1px solid rgba(255,211,42,.25);}
+.score-bar-track{display:inline-block;width:56px;height:5px;background:var(--bg);border-radius:999px;vertical-align:middle;margin-right:5px;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:999px;}
+
+/* ── Compare ── */
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);}
+.compare-cell{background:var(--surface2);padding:12px 16px;font-size:11px;}
+.compare-name{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sans);}
+.compare-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(36,46,66,.6);}
+.compare-row:last-child{border-bottom:none;}
+.compare-key{color:var(--muted);font-size:10px;letter-spacing:.04em;font-family:var(--sans);}
+.compare-val{font-size:11px;font-weight:700;font-family:var(--mono);}
+.win{color:var(--accent);}
+
+/* ── Provider strip ── */
+.provider-strip-wrap{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.1);}
+.provider-nav{width:30px;height:30px;border:1.5px solid var(--border);border-radius:999px;background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--mono);}
+.provider-nav:hover{border-color:var(--accent);color:var(--accent);}
+.provider-strip{display:flex;gap:8px;overflow-x:auto;padding:2px;scroll-behavior:smooth;}
+.provider-pill{min-width:175px;padding:9px 12px;border:1.5px solid var(--border);border-radius:12px;
+  background:var(--surface2);cursor:pointer;transition:all .2s;color:var(--text);
+  font-family:var(--sans);text-align:left;appearance:none;}
+.provider-pill:hover{border-color:var(--border-hi);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.25);}
+.provider-pill.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(129,140,248,.2) inset,0 4px 12px rgba(129,140,248,.08);background:rgba(129,140,248,.06);}
+.provider-pill-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+.provider-pill-name{font-size:11px;font-weight:700;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.provider-pill-score{font-size:15px;font-weight:800;color:var(--accent);}
+.provider-pill-meta{display:flex;gap:8px;font-size:10px;color:var(--muted);}
+.provider-summary{padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(0,0,0,.08);}
+.provider-summary-grid{display:grid;gap:10px;align-items:start;}
+.provider-summary-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;}
+.provider-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.provider-sub{font-size:11px;color:var(--muted);line-height:1.5;}
+.provider-summary-notes{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+.provider-metrics-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;}
+.provider-metric{padding:9px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface2);min-height:54px;}
+.provider-metric-v{font-size:15px;font-weight:700;line-height:1.1;font-family:var(--sans);}
+.provider-metric-l{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px;font-family:var(--sans);}
+.provider-details{margin-top:6px;border:1px solid var(--border);border-radius:var(--r-sm);background:rgba(255,255,255,.01);overflow:hidden;}
+.provider-details summary{cursor:pointer;list-style:none;padding:8px 12px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;font-family:var(--sans);}
+.provider-details summary::-webkit-details-marker{display:none;}
+.provider-details[open] summary{border-bottom:1px solid var(--border);}
+.provider-insights{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;}
+.provider-reason{padding:4px 10px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.02);font-size:10px;color:var(--muted);font-family:var(--sans);}
+.heatmap-wrap{padding:10px 16px;border-bottom:1px solid var(--border);}
+.heatmap-panel{border:1px solid var(--border);border-radius:var(--r-sm);background:rgba(255,255,255,.01);overflow:hidden;}
+.heatmap-panel summary{cursor:pointer;list-style:none;padding:8px 12px;font-size:10px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;font-weight:700;font-family:var(--sans);}
+.heatmap-panel summary::-webkit-details-marker{display:none;}
+.heatmap-panel[open] summary{border-bottom:1px solid var(--border);}
+.heatmap-inner{padding:10px 12px 12px;}
+.heatmap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:6px;}
+.heatmap-cell{padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-xs);background:var(--surface2);}
+.heatmap-range{font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px;font-family:var(--mono);}
+.heatmap-meta{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:var(--muted);}
+.heatmap-bar{height:5px;border-radius:999px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:6px;}
+.heatmap-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--blue));}
+
+/* ── Type dots ── */
+.type-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;flex-shrink:0;}
+.dot-residential{background:var(--residential);}
+.dot-mobile{background:var(--mobile);}
+.dot-datacenter{background:var(--datacenter);}
+.dot-flagged{background:var(--flagged);}
+.dot-unknown{background:var(--unknown);}
+.dot-private{background:#e040fb;}
+
+/* ── IP group cards ── */
+.ip-groups{display:flex;flex-direction:column;gap:5px;padding:8px;}
+.ip-group{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);
+  box-shadow:0 1px 4px rgba(0,0,0,.2);}
+.ip-group-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s;flex-wrap:wrap;user-select:none;}
+.ip-group-hdr:hover{background:var(--surface2);}
+.ip-group-hdr.resi{border-left:3px solid var(--residential);}
+.ip-group-hdr.mobile{border-left:3px solid var(--mobile);}
+.ip-group-hdr.dc{border-left:3px solid var(--datacenter);}
+.ip-group-hdr.flagged{border-left:3px solid var(--flagged);}
+.ip-group-hdr.unknown{border-left:3px solid var(--unknown);}
+.ip-group-hdr.private{border-left:3px solid #e040fb;}
+.ip-addr{font-size:13px;font-weight:700;letter-spacing:.02em;min-width:110px;font-family:var(--mono);}
+.ip-isp{font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ip-stats{display:flex;align-items:center;gap:8px;font-size:11px;flex-shrink:0;flex-wrap:wrap;}
+.ip-toggle{color:var(--muted);font-size:11px;flex-shrink:0;transition:transform .2s;}
+.ip-group.open .ip-toggle{transform:rotate(90deg);}
+.ip-group-body{display:none;border-top:1px solid var(--border);background:rgba(0,0,0,.15);}
+.ip-group.open .ip-group-body{display:block;}
+.ip-cred-row{display:flex;align-items:flex-start;gap:10px;padding:10px 14px 10px 28px;border-bottom:1px solid rgba(36,46,66,.5);font-size:11px;flex-wrap:wrap;}
+.ip-cred-row:last-child{border-bottom:none;}
+.ip-cred-row:hover{background:rgba(255,255,255,.02);}
+.ip-cred-cell{flex:1;min-width:280px;}
+.ip-cred-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+.ip-cred{font-family:var(--mono);color:var(--text);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ip-cred-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;color:var(--muted);font-size:10px;}
+.ip-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;
+  border:1px solid rgba(120,150,185,.2);background:rgba(255,255,255,.03);font-family:var(--sans);font-size:10px;}
+.ip-chip.score{color:var(--accent);border-color:rgba(129,140,248,.28);}
+.ip-chip.warn{color:var(--warn);border-color:rgba(255,159,67,.28);}
+.ip-chip.bad{color:var(--fail);border-color:rgba(255,92,92,.28);}
+.ip-spark{display:inline-flex;align-items:flex-end;gap:2px;height:16px;overflow:hidden;}
+.ip-spark-bar{width:4px;flex-shrink:0;border-radius:1px;min-height:2px;}
+
+/* ── Tables ── */
+.subnet-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;}
+.subnet-table th{text-align:left;padding:6px 12px;font-size:10px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;font-family:var(--sans);}
+.subnet-table td{padding:6px 12px;border-bottom:1px solid rgba(36,46,66,.5);white-space:nowrap;font-family:var(--mono);}
+.subnet-table tr:hover td{background:rgba(255,255,255,.02);}
+.tbl-wrap{overflow-x:auto;max-height:600px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead{position:sticky;top:0;z-index:2;}
+thead th{text-align:left;padding:8px 12px;font-size:10px;letter-spacing:.06em;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);white-space:nowrap;font-family:var(--sans);}
+tbody tr:hover{background:rgba(255,255,255,.02);}
+tbody td{padding:7px 12px;border-bottom:1px solid rgba(36,46,66,.6);white-space:nowrap;font-family:var(--mono);}
+.lat-g{color:var(--accent);}
+.lat-o{color:var(--gold);}
+.lat-s{color:var(--warn);}
+.spark{display:inline-flex;align-items:flex-end;gap:2px;height:18px;width:60px;overflow:hidden;}
+.spark-bar{width:5px;flex-shrink:0;border-radius:1px;min-height:2px;}
+.spark-bar.g{background:var(--accent);}
+.spark-bar.o{background:var(--gold);}
+.spark-bar.r{background:var(--fail);}
+
+/* ── Footer bars & filters ── */
+.export-bar{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;background:rgba(0,0,0,.12);}
+.export-lbl{font-size:11px;color:var(--muted);margin-right:auto;}
+.filter-row{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;background:rgba(0,0,0,.1);flex-wrap:wrap;}
+.filter-tag{font-size:11px;color:var(--muted);}
+.filter-btn{padding:4px 12px;font-size:10px;font-weight:700;background:transparent;border:1.5px solid var(--border);border-radius:999px;color:var(--muted);cursor:pointer;font-family:var(--sans);transition:all .15s;letter-spacing:.03em;}
+.filter-btn:hover{border-color:var(--border-hi);color:var(--text);}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(129,140,248,.08);}
+.empty{padding:32px;text-align:center;font-size:12px;color:var(--muted);}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--accent);
+  border-radius:var(--r-sm);padding:11px 18px;font-size:12px;color:var(--accent);
+  transform:translateY(60px);opacity:0;transition:all .25s;z-index:500;
+  max-width:320px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
+.toast.show{transform:translateY(0);opacity:1;}
+
+/* ── Providers page ── */
+.pv-card{padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:all .15s;}
+.pv-card:last-child{border-bottom:none;}
+.pv-card:hover{background:var(--surface2);}
+.pv-card.sel{background:rgba(129,140,248,.05);border-left:3px solid var(--accent);}
+.pv-name{font-size:13px;font-weight:700;margin-bottom:3px;}
+.pv-meta{font-size:11px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;}
+
+/* ── Link session section ── */
+.link-sess-wrap{padding:10px 16px;border-top:1px solid var(--border);background:rgba(0,0,0,.1);}
+.link-sess-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.link-sess-row{display:flex;gap:8px;align-items:center;}
+.link-sess-row select{margin:0;flex:1;}
+
+@media(max-width:860px){
+  .app{grid-template-columns:1fr;}
+  .stats-row{grid-template-columns:repeat(2,1fr);}
+  .analysis-grid{grid-template-columns:1fr;}
+}
+
+/* ── Proxy type pills ── */
+.type-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:9px;font-weight:800;letter-spacing:.05em;font-family:var(--sans);}
+.type-pill.resi{background:rgba(96,165,250,.15);color:var(--blue);border:1px solid rgba(96,165,250,.35);}
+.type-pill.isp{background:rgba(192,132,252,.15);color:var(--purple);border:1px solid rgba(192,132,252,.35);}
+.type-pill.mixed{background:rgba(128,144,168,.12);color:var(--unknown);border:1px solid rgba(128,144,168,.3);}
+
+/* ── Context menu ── */
+.ctx-item{padding:9px 16px;font-size:12px;cursor:pointer;transition:background .12s;font-family:var(--sans);font-weight:600;color:var(--text);}
+.ctx-item:hover{background:rgba(129,140,248,.1);}
+.ctx-danger{color:var(--fail);}
+.ctx-danger:hover{background:rgba(255,92,92,.08);}
+
+/* ── Session groups ── */
+.sg-row{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s;user-select:none;}
+.sg-row:last-child{border-bottom:none;}
+.sg-row:hover{background:var(--surface2);}
+.sg-row.active{background:rgba(129,140,248,.06);border-left:3px solid var(--accent);}
+.sg-row.drag-over{background:rgba(129,140,248,.12);}
+.sg-fav{font-size:13px;flex-shrink:0;}
+.sg-name{flex:1;font-size:12px;font-weight:600;}
+.sg-count{font-size:10px;color:var(--muted);}
+
+/* ── Simplified session detail ── */
+.sess-detail-section{border-top:1px solid var(--border);}
+.sess-detail-section>summary{padding:10px 16px;cursor:pointer;font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--muted);list-style:none;display:flex;align-items:center;gap:6px;font-family:var(--sans);text-transform:uppercase;}
+.sess-detail-section>summary::-webkit-details-marker{display:none;}
+.sess-detail-section[open]>summary{color:var(--accent);}
+
+/* ── Light mode overrides ── */
+body.light-mode{
+  --bg:#f0f4fc;--surface:#ffffff;--surface2:#e8edf8;
+  --border:#ccd5e8;--border-hi:#aab8d4;
+  --text:#1c2540;--muted:#6070a0;--unknown:#7080a8;
+}
+body.light-mode header{background:linear-gradient(180deg,#e8edf8 0%,#ffffff 100%);}
+body.light-mode .page-nav{background:#ffffff;}
+body.light-mode .ph{background:linear-gradient(90deg,rgba(129,140,248,.07) 0%,transparent 60%);}
+body.light-mode input[type=text],body.light-mode input[type=number],body.light-mode textarea,body.light-mode select{background:#f8faff;color:var(--text);}
+body.light-mode .analytics-table td{border-bottom-color:rgba(180,195,220,.5);}
+body.light-mode tbody td{border-bottom-color:rgba(180,195,220,.5);}
+body.light-mode .ip-group-body{background:rgba(0,0,0,.04);}
+body.light-mode .heatmap-cell,body.light-mode .provider-metric,body.light-mode .stat{background:#f0f4fc;}
+body.light-mode .toast{background:#ffffff;color:var(--accent);}
+body.light-mode .ip-group{background:#ffffff;}
+
+/* ── Custom dialog ── */
+.app-dialog-backdrop{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;}
+.app-dialog-box{background:var(--surface2);border:1px solid var(--border-hi);border-radius:var(--r);padding:24px;min-width:320px;max-width:480px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.55);}
+.app-dialog-msg{font-size:13px;font-weight:600;margin-bottom:14px;color:var(--text);line-height:1.5;}
+.app-dialog-row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+
+/* ── Debug log ── */
+.dbg-log{font-family:var(--mono);font-size:11px;line-height:1.7;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;max-height:340px;overflow-y:auto;color:var(--muted);white-space:pre-wrap;word-break:break-all;}
+.dbg-log .dbg-info{color:var(--text);}
+.dbg-log .dbg-ok{color:var(--accent);}
+.dbg-log .dbg-err{color:var(--fail);}
+.dbg-log .dbg-warn{color:var(--warn);}
+
+/* ── Settings & Integrations pages ── */
+.settings-page{padding:24px;max-width:900px;margin:0 auto;}
+.settings-section{margin-bottom:20px;}
+.settings-section .ph{border-radius:var(--r) var(--r) 0 0;}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-bottom:1px solid var(--border);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-label{font-size:13px;font-weight:600;color:var(--text);}
+.toggle-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+.toggle-switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--border-hi);border-radius:999px;cursor:pointer;transition:background .2s;}
+.toggle-switch input:checked+.toggle-slider{background:var(--accent);}
+.toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s;}
+.toggle-switch input:checked+.toggle-slider::before{transform:translateX(20px);}
+.integration-card{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px;}
+.integration-card:last-child{border-bottom:none;}
+.integration-icon{width:38px;height:38px;border-radius:var(--r-sm);background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.integration-info{flex:1;}
+.integration-name{font-size:13px;font-weight:700;margin-bottom:3px;}
+.integration-desc{font-size:11px;color:var(--muted);line-height:1.5;}
+.integration-status{font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.05</div>
+  <div id="clock"></div>
+</header>
+<nav class="page-nav">
+  <button class="page-nav-btn active" id="navTester"       onclick="setPage('tester')">TESTER</button>
+  <button class="page-nav-btn"        id="navProviders"    onclick="setPage('providers')">PROVIDERS</button>
+  <button class="page-nav-btn"        id="navSettings"     onclick="setPage('settings')">SETTINGS</button>
+  <button class="page-nav-btn"        id="navIntegrations" onclick="setPage('integrations')">INTEGRATIONS</button>
+</nav>
+
+<div id="appPage">
+<div class="app">
+
+<!-- LEFT ──────────────────────────────────────────────────────────────────── -->
+<div>
+  <div class="panel">
+    <div class="ph">⬡ PROXY LIST</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('paste')">PASTE</div>
+      <div class="tab" onclick="switchTab('file')">FILE</div>
+      <div class="tab" onclick="switchTab('saved')" id="savedTab">GROUPS</div>
+      <div class="tab" onclick="switchTab('api')">API</div>
+    </div>
+    <div class="tc active" id="tab-paste">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <label style="margin:0;flex:1">PASTE PROXIES</label>
+        <span class="pcnt" id="pasteCounter">0 proxies</span>
+      </div>
+      <textarea id="pasteArea" rows="9" placeholder="host:port&#10;host:port:user:pass&#10;user:pass@host:port" oninput="countPaste()"></textarea>
+      <input type="text" id="pasteName" placeholder="List name" style="margin-top:9px;margin-bottom:0">
+      <div class="btn-row">
+        <button class="btn btn-out btn-sm" onclick="saveFromPaste()">SAVE</button>
+        <button class="btn btn-sm" onclick="useSource('paste')">USE THIS ▶</button>
+      </div>
+    </div>
+    <div class="tc" id="tab-file">
+      <label>FILE</label>
+      <div class="dz" id="dz">
+        <input type="file" id="fi" accept=".txt,.csv">
+        <div class="dz-label">Drop file or <span>click to browse</span></div>
+        <div class="file-info" id="fileInfo"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-out btn-sm" onclick="saveFromFile()">SAVE</button>
+        <button class="btn btn-sm" onclick="useSource('file')">USE THIS ▶</button>
+      </div>
+    </div>
+    <div class="tc" id="tab-saved">
+      <div id="savedEl"><div class="empty">No saved lists yet.</div></div>
+      <hr class="divider">
+      <button class="btn btn-sm" id="useSavedBtn" onclick="useSource('saved')" disabled>USE SELECTED ▶</button>
+    </div>
+    <div class="tc" id="tab-api">
+      <div class="src-ind active" style="margin-bottom:12px">⬡ PULL PROXIES FROM A CONFIGURED INTEGRATION</div>
+      <label>INTEGRATION</label>
+      <select id="apiIntegrationSel" onchange="apiIntegrationChanged()" style="margin-bottom:10px">
+        <option value="">— Select an integration —</option>
+      </select>
+      <div id="apiIntegrationFields" style="display:none">
+        <label>LIST / PLAN ID <span id="apiListIdHint" style="font-weight:400;color:var(--muted);text-transform:none"></span></label>
+        <input type="text" id="apiListId" placeholder="Leave blank for default" style="margin-bottom:10px">
+        <label>QUANTITY</label>
+        <input type="number" id="apiQty" value="1000" min="1" max="50000" style="margin-bottom:10px">
+        <button class="btn" onclick="fetchFromApi()">⬇ FETCH PROXIES</button>
+        <div id="apiStatus" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+      </div>
+      <div id="apiNoIntegrations" style="display:none">
+        <div class="empty" style="padding:20px 0">No integrations configured.<br><span style="font-size:11px">Go to the <strong>Integrations</strong> tab to add proxy APIs.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ph">⬡ CONFIG</div>
+    <div class="pb">
+      <div class="src-ind" id="srcInd">No list selected</div>
+      <label>TEST ENDPOINT URL</label>
+      <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting"
+        title="ip-api with full fields — required for residential/DC/mobile detection.">
+      <div class="row2">
+        <div><label>CONCURRENCY</label><input type="number" id="concurrency" value="150" min="10" max="500"></div>
+        <div><label>TIMEOUT (s)</label><input type="number" id="timeout" value="10" min="1" max="60" step=".5"></div>
+      </div>
+      <div class="row2">
+        <div><label>RETRIES</label><input type="number" id="retries" value="1" min="1" max="5"></div>
+        <div><label>TOP N</label><input type="number" id="topN" value="1000" min="100" max="5000"></div>
+      </div>
+      <hr class="divider">
+      <label style="margin-bottom:8px">RUN MODE</label>
+      <div class="mode-row">
+        <button class="mode-btn active" id="mSingle" onclick="setMode('single')">SINGLE RUN</button>
+        <button class="mode-btn" id="mMulti" onclick="setMode('multi')">MULTI-PASS</button>
+      </div>
+      <div id="multiCfg" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <label style="margin:0;flex:1">PASSES</label>
+          <input type="number" id="autoPasses" value="3" min="2" max="10" style="width:60px;margin:0;">
+        </div>
+        <div id="sessSelectWrap" style="display:none;margin-bottom:12px;">
+          <label>ADD TO EXISTING SESSION</label>
+          <select id="sessSelect" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 9px;border-radius:2px;outline:none;">
+            <option value="">— New session —</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label>PROXY TYPE</label>
+        <select id="proxyType" style="margin-bottom:0">
+          <option value="residential">Residential</option>
+          <option value="isp">ISP / Mobile</option>
+          <option value="mixed">Mixed / Unknown</option>
+        </select>
+      </div>
+      <button class="btn" id="startBtn" onclick="submitJob()">▶ START TEST</button>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT ─────────────────────────────────────────────────────────────────── -->
+<div>
+
+  <!-- Sessions -->
+  <div class="panel">
+    <div class="ph">⬡ SESSIONS <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="sessCount"></span></div>
+    <div id="sessionsList"><div class="empty">No sessions. Use Multi-Pass mode.</div></div>
+  </div>
+
+  <!-- Cross-session comparison -->
+  <div class="panel" id="comparePanel" style="display:none">
+    <div class="ph">⬡ PROVIDER COMPARISON <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="compareSubtitle"></span></div>
+    <div class="compare-grid" id="compareGrid"></div>
+  </div>
+
+  <!-- Session detail -->
+  <div class="panel" id="sessDetail" style="display:none">
+    <div class="ph">
+      ⬡ <span id="sessDetailName"></span>
+      <span style="margin-left:auto;display:flex;gap:7px;">
+        <button class="btn btn-out btn-sm" id="addRunBtn" onclick="addRunToSession()">+ RUN AGAIN</button>
+        <button class="btn btn-sm btn-red" onclick="deleteSession()">✕</button>
+      </span>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-v" id="sdTotal">—</div><div class="stat-l">PROXIES</div></div>
+      <div class="stat"><div class="stat-v g" id="sdRuns">—</div><div class="stat-l">RUNS</div></div>
+      <div class="stat"><div class="stat-v gold" id="sdPassed">—</div><div class="stat-l">PASSED ALL</div></div>
+      <div class="stat"><div class="stat-v" id="sdStatus">—</div><div class="stat-l">STATUS</div></div>
+    </div>
+
+    <!-- Session Analytics (composite ranking first — most important) -->
+    <div id="sessAnalyticsPanel" class="analytics-section" style="display:none">
+      <div class="analytics-ph">⬡ SESSION ANALYTICS
+        <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+          <input type="number" id="compositeCopyN" value="1000" min="1" max="10000"
+            style="width:72px;padding:3px 6px;margin:0;font-size:11px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
+            title="Number of proxies to copy">
+          <button class="btn btn-out btn-sm" onclick="copyComposite()" id="compositeCopyBtn">⎘ COPY BEST</button>
+        </span>
+      </div>
+      <details class="sess-detail-section" style="border-top:1px solid var(--border)">
+      <summary>⬡ ADVANCED ANALYSIS — ISP PROFILE &amp; CROWDING</summary>
+      <!-- ISP Speed Profile -->
+      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">ISP SPEED PROFILE</div>
+      <div style="overflow-x:auto;max-height:200px;overflow-y:auto;">
+        <table class="analytics-table"><thead><tr>
+          <th>ISP</th><th>COUNT</th><th>POOL %</th><th>AVG MS</th><th>CONSISTENCY</th><th>TYPE</th>
+        </tr></thead><tbody id="ispProfileBody"></tbody></table>
+      </div>
+      <!-- Crowding Analysis -->
+      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:4px;">IP CROWDING ANALYSIS</div>
+      <div id="crowdingContent" style="padding:0 16px 10px;font-size:11px;color:var(--muted)">Analyzing...</div>
+      </details>
+      <!-- Composite Ranking -->
+      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">COMPOSITE RANKING <span style="font-weight:400;color:var(--muted);font-size:9px">(40% speed · 30% consistency · 20% IP uniqueness · 10% type · excludes mobile/DC)</span></div>
+      <div style="overflow-x:auto;max-height:260px;overflow-y:auto;">
+        <table class="analytics-table"><thead><tr>
+          <th>#</th><th>SCORE</th><th>PROXY</th><th>ISP</th><th>EGRESS IP</th><th>AVG MS</th><th>PASSES</th><th>CROWD</th>
+        </tr></thead><tbody id="compositeBody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- IP Analysis (collapsible) -->
+    <details class="sess-detail-section" id="sessAnalysisDetail">
+      <summary>⬡ IP POOL ANALYSIS</summary>
+      <div id="sessAnalysisPanel">
+        <div id="sessAnalysisContent"></div>
+      </div>
+    </details>
+
+    <!-- Run jobs (collapsible) -->
+    <details class="sess-detail-section" id="sessRunsDetail">
+      <summary id="sessRunsSummary">⬡ RUN HISTORY</summary>
+      <div id="runsList"></div>
+    </details>
+
+    <!-- Results -->
+    <div class="filter-row">
+      <span class="filter-tag">MIN PASSES:</span>
+      <input type="number" id="minPasses" value="3" min="1" max="10"
+        style="width:52px;padding:3px 7px;margin:0;font-size:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
+        oninput="renderSessResults()">
+      <span class="filter-tag" id="minPassesLabel">of 0 runs</span>
+      <span style="margin-left:6px;color:var(--border-hi)">|</span>
+      <button class="filter-btn active" id="sf-all"  onclick="setSessFilter('all')">ALL</button>
+      <button class="filter-btn" id="sf-residential" onclick="setSessFilter('residential')">RESI</button>
+      <button class="filter-btn" id="sf-mobile"      onclick="setSessFilter('mobile')">MOBILE</button>
+      <button class="filter-btn" id="sf-unknown"     onclick="setSessFilter('unknown')">UNKNOWN</button>
+      <button class="filter-btn" id="sf-datacenter"  onclick="setSessFilter('datacenter')">DC</button>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="sessResCount"></span>
+    </div>
+    <div class="provider-strip-wrap">
+      <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',-1)">‹</button>
+      <div id="sessProviderTabs" class="provider-strip"></div>
+      <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',1)">›</button>
+    </div>
+    <div id="sessProviderSummary" class="provider-summary"></div>
+    <div id="sessSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+    <div class="tbl-wrap" style="max-height:640px;">
+      <div id="sessBody"></div>
+      <div id="sessEmpty" class="empty" style="display:none">No proxies passed yet. Results appear after each run.</div>
+    </div>
+    <div class="export-bar">
+      <span class="export-lbl" id="sessExportLbl"></span>
+      <button class="btn btn-out btn-sm" id="sessCopyBtn" onclick="copySession()">⎘ COPY TOP 1000</button>
+      <button class="btn btn-out btn-sm" onclick="exportSession()">⬇ TXT</button>
+      <button class="btn btn-out btn-sm" onclick="downloadSessionDebug()">AI DEBUG</button>
+    </div>
+  </div>
+
+  <!-- Single run jobs -->
+  <div class="panel">
+    <div class="ph">⬡ SINGLE RUNS <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="jobCount"></span></div>
+    <div id="jobsList"><div class="empty">No single-run jobs yet.</div></div>
+  </div>
+
+  <!-- Single run results -->
+  <div class="panel" id="resPanel" style="display:none">
+    <div class="ph">⬡ RESULTS — <span id="resName"></span>
+      <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="resMeta"></span>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-v" id="rTotal">—</div><div class="stat-l">TESTED</div></div>
+      <div class="stat"><div class="stat-v g" id="rPassed">—</div><div class="stat-l">PASSED</div></div>
+      <div class="stat"><div class="stat-v r" id="rFailed">—</div><div class="stat-l">FAILED</div></div>
+      <div class="stat"><div class="stat-v" id="rRate">—</div><div class="stat-l">PASS RATE</div></div>
+    </div>
+    <!-- Single run IP analysis -->
+    <div id="jobAnalysisPanel" style="display:none">
+      <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.15em;color:var(--accent);">⬡ IP POOL ANALYSIS</div>
+      <div id="jobAnalysisContent"></div>
+    </div>
+    <div class="provider-strip-wrap">
+      <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',-1)">‹</button>
+      <div id="jobProviderTabs" class="provider-strip"></div>
+      <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',1)">›</button>
+    </div>
+    <div id="jobProviderSummary" class="provider-summary"></div>
+    <div id="jobSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+    <div class="tbl-wrap" style="max-height:640px;">
+      <div id="resBody"></div>
+      <div id="resEmpty" class="empty" style="display:none">No results yet.</div>
+    </div>
+    <div class="export-bar">
+      <span class="export-lbl" id="resExportLbl"></span>
+      <button class="btn btn-out btn-sm" id="resCopyBtn" onclick="copyJob()">⎘ COPY TOP 1000</button>
+      <button class="btn btn-out btn-sm" onclick="exportJob()">⬇ TXT</button>
+      <button class="btn btn-out btn-sm" onclick="downloadJobDebug()">AI DEBUG</button>
+    </div>
+  </div>
+
+</div>
+</div>
+</div><!-- /appPage -->
+
+<!-- ── PROVIDERS PAGE ─────────────────────────────────────────────────────── -->
+<div id="providersPage" style="display:none;padding:16px;max-width:1600px;margin:0 auto;">
+<div style="display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start;">
+
+<!-- LEFT ── -->
+<div>
+  <!-- Session Groups -->
+  <div class="panel">
+    <div class="ph">⬡ SESSION GROUPS
+      <button class="btn btn-out btn-sm" style="margin-left:auto;padding:3px 10px;font-size:10px" onclick="createSessionGroup()">+ GROUP</button>
+    </div>
+    <div id="sgList"><div class="empty" style="padding:16px">No groups yet.</div></div>
+  </div>
+
+  <!-- Create Provider -->
+  <div class="panel">
+    <div class="ph">⬡ ADD PROVIDER</div>
+    <div class="pb">
+      <label>PROVIDER NAME</label>
+      <input type="text" id="pvName" placeholder="e.g. Provider A — Tier 1">
+      <div class="mode-row" style="margin:10px 0 4px;">
+        <button class="mode-btn active" id="pvModePaste" onclick="setPvMode('paste')">PASTE LIST</button>
+        <button class="mode-btn" id="pvModeSession" onclick="setPvMode('session')">FROM SESSION</button>
+      </div>
+      <!-- Paste mode -->
+      <div id="pvPasteWrap">
+        <label>PROXY LIST</label>
+        <textarea id="pvText" rows="6" placeholder="host:port&#10;host:port:user:pass&#10;user:pass@host:port" oninput="pvTextChanged()"></textarea>
+      </div>
+      <!-- Session import mode -->
+      <div id="pvSessionWrap" style="display:none">
+        <label>IMPORT FROM TESTER SESSION</label>
+        <select id="pvSessionSelect" onchange="pvSessionSelected()">
+          <option value="">— Select a saved session —</option>
+        </select>
+        <div id="pvSessionPreview" style="font-size:11px;margin-top:6px;display:none;padding:7px 10px;border-radius:var(--r-xs);background:var(--bg);border:1px solid var(--border);"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <span id="pvCounter" class="pcnt" style="flex:1">0 proxies</span>
+        <button class="btn btn-sm" onclick="createProvider()">+ ADD PROVIDER</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-pick -->
+  <div class="panel">
+    <div class="ph">⬡ AUTO-PICK BEST</div>
+    <div class="pb">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5">Pull top proxies from <strong style="color:var(--text)">all provider tests</strong>, deduplicated by egress IP, ranked by composite score.</div>
+      <div class="row2" style="margin-bottom:10px;">
+        <div><label>COPY TOP N</label><input type="number" id="autopickN" value="1000" min="1" max="10000" style="margin-bottom:0"></div>
+        <div><label>MIN SCORE</label><input type="number" id="autopickMin" value="0" min="0" max="100" style="margin-bottom:0"></div>
+      </div>
+      <button class="btn btn-out" onclick="autopickProviders()" id="autopickBtn">⎘ COPY BEST FROM ALL PROVIDERS</button>
+    </div>
+  </div>
+
+  <!-- Provider List -->
+  <div class="panel">
+    <div class="ph">⬡ PROVIDERS <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="pvCount"></span></div>
+    <div id="pvList"><div class="empty">No providers yet. Add one above.</div></div>
+  </div>
+</div>
+
+<!-- RIGHT ── Provider Detail -->
+<div id="pvDetail" style="display:none">
+  <div class="panel">
+    <div class="ph">
+      ⬡ <span id="pvDetailName">—</span>
+      <span style="margin-left:auto;display:flex;gap:7px;">
+        <button class="btn btn-out btn-sm" id="pvRunBtn" onclick="runProvider()">▶ RUN TEST</button>
+        <button class="btn btn-sm btn-red" onclick="deleteProvider()">✕ DELETE</button>
+      </span>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><div class="stat-v" id="pvdProxies">—</div><div class="stat-l">PROXIES</div></div>
+      <div class="stat"><div class="stat-v g" id="pvdSessCount">—</div><div class="stat-l">SESSIONS</div></div>
+      <div class="stat"><div class="stat-v gold" id="pvdResidential">—</div><div class="stat-l">RESIDENTIAL %</div></div>
+      <div class="stat"><div class="stat-v" id="pvdScore">—</div><div class="stat-l">QUALITY SCORE</div></div>
+    </div>
+
+    <!-- Sessions list -->
+    <div id="pvdSessionsList" style="border-top:1px solid var(--border);">
+      <div class="empty">No tests run yet.</div>
+    </div>
+
+    <!-- Link an existing tester session -->
+    <div class="link-sess-wrap" id="pvdLinkWrap">
+      <div class="link-sess-label">⬡ Link Tester Session</div>
+      <div class="link-sess-row">
+        <select id="pvdLinkSelect"><option value="">— Select a session to link —</option></select>
+        <button class="btn btn-out btn-sm" onclick="linkSessionToProvider()">LINK</button>
+      </div>
+    </div>
+
+    <!-- Composite ranking -->
+    <div id="pvdAnalytics" style="display:none">
+      <div style="padding:10px 16px 4px;border-top:1px solid var(--border);font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">COMPOSITE RANKING <span style="font-weight:400;font-size:9px">(combined across all sessions, deduped by egress IP)</span></div>
+      <div style="overflow-x:auto;max-height:480px;overflow-y:auto;">
+        <table class="analytics-table"><thead><tr>
+          <th>#</th><th>SCORE</th><th>PROXY</th><th>ISP</th><th>EGRESS IP</th><th>AVG MS</th><th>PASSES</th>
+        </tr></thead><tbody id="pvdCompositeBody"></tbody></table>
+      </div>
+      <div style="padding:10px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);background:rgba(0,0,0,.2);">
+        <span style="font-size:11px;color:var(--muted);flex:1" id="pvdCopyLbl"></span>
+        <input type="number" id="pvdCopyN" value="1000" min="1" max="10000"
+          style="width:76px;padding:4px 7px;margin:0;font-size:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);">
+        <button class="btn btn-out btn-sm" onclick="copyProviderBest()" id="pvdCopyBtn">⎘ COPY BEST</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /providers grid -->
+</div><!-- /providersPage -->
+
+<!-- ── SETTINGS PAGE ──────────────────────────────────────────────────────── -->
+<div id="settingsPage" style="display:none">
+<div class="settings-page">
+
+  <div class="panel settings-section">
+    <div class="ph">⬡ APPEARANCE</div>
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Light Mode</div>
+        <div class="toggle-sub">Switch between dark and light color themes</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="lightModeToggle" onchange="applyLightMode(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="panel settings-section">
+    <div class="ph">⬡ DEBUG LOG
+      <span style="margin-left:auto;display:flex;gap:7px;">
+        <button class="btn btn-out btn-sm" onclick="copyDbgLog()">⎘ COPY LOGS</button>
+        <button class="btn btn-out btn-sm" onclick="clearDbgLog()">✕ CLEAR</button>
+      </span>
+    </div>
+    <div style="padding:12px">
+      <div class="dbg-log" id="dbgLogEl">
+        <span class="dbg-info">— Debug log initialized —</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /settingsPage -->
+
+<!-- ── INTEGRATIONS PAGE ───────────────────────────────────────────────────── -->
+<div id="integrationsPage" style="display:none">
+<div class="settings-page">
+
+  <div class="panel settings-section">
+    <div class="ph">⬡ PROXY API INTEGRATIONS
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Connect proxy provider APIs for one-click list fetching</span>
+    </div>
+
+    <!-- Add integration form -->
+    <div style="padding:16px;border-bottom:1px solid var(--border)">
+      <div class="row2" style="margin-bottom:10px">
+        <div>
+          <label>PROVIDER TYPE</label>
+          <select id="intType" style="margin-bottom:0" onchange="intTypeChanged()">
+            <option value="webshare">Webshare</option>
+            <option value="proxies.fo">Proxies.fo</option>
+            <option value="iproyal">IPRoyal</option>
+            <option value="brightdata">Bright Data</option>
+            <option value="custom">Custom / Generic</option>
+          </select>
+        </div>
+        <div>
+          <label>DISPLAY NAME</label>
+          <input type="text" id="intName" placeholder="e.g. My Webshare Account" style="margin-bottom:0">
+        </div>
+      </div>
+      <label>API KEY / TOKEN</label>
+      <input type="text" id="intApiKey" placeholder="Paste your API key here" style="margin-bottom:10px">
+      <div id="intExtraFields"></div>
+      <button class="btn btn-out" onclick="addIntegration()">+ ADD INTEGRATION</button>
+    </div>
+
+    <!-- Integration list -->
+    <div id="integrationList"><div class="empty">No integrations yet. Add one above.</div></div>
+  </div>
+
+  <div class="panel settings-section">
+    <div class="ph">⬡ HOW IT WORKS</div>
+    <div style="padding:16px;font-size:12px;color:var(--muted);line-height:1.8">
+      <p style="margin-bottom:10px">Add your proxy provider API credentials here. Once configured, you can pull fresh proxy lists directly in the <strong style="color:var(--text)">Tester → API</strong> tab without copy-pasting.</p>
+      <p style="margin-bottom:10px">Supported providers and their endpoints will expand over time. Use <strong style="color:var(--text)">Custom / Generic</strong> to define any REST endpoint that returns a plain-text proxy list.</p>
+      <p>API keys are stored locally on your machine and never transmitted anywhere except directly to the provider's API.</p>
+    </div>
+  </div>
+
+</div>
+</div><!-- /integrationsPage -->
+
+<!-- ── Custom dialog (replaces prompt()) ─────────────────────────────────── -->
+<div id="appDialog" style="display:none" class="app-dialog-backdrop">
+  <div class="app-dialog-box">
+    <div id="appDialogMsg" class="app-dialog-msg"></div>
+    <input type="text" id="appDialogInput" style="margin-bottom:0">
+    <div class="app-dialog-row">
+      <button class="btn btn-red btn-sm" onclick="appDialogCancel()">CANCEL</button>
+      <button class="btn btn-sm" onclick="appDialogOk()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Group Picker Dialog ────────────────────────────────────────────────── -->
+<div id="groupPickerDialog" style="display:none" class="app-dialog-backdrop">
+  <div class="app-dialog-box" style="min-width:360px;max-width:440px;">
+    <div class="app-dialog-msg">Save to which group?</div>
+    <div id="groupPickerList" style="margin-bottom:4px;max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+    <div class="app-dialog-row" style="justify-content:space-between;">
+      <button class="btn btn-out btn-sm" onmousedown="event.stopPropagation()" onclick="groupPickerCreateNew()">+ NEW GROUP</button>
+      <button class="btn btn-red btn-sm" onmousedown="event.stopPropagation()" onclick="groupPickerCancel()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="ctxMenu" style="display:none;position:fixed;z-index:9999;background:var(--surface2);border:1px solid var(--border-hi);border-radius:var(--r-sm);box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:160px;overflow:hidden;"></div>
+
+<script>
+const API = window.location.origin;
+let activeSource=null, selectedSavedId=null, selectedFile=null;
+let activeSessionId=null, activeJobId=null;
+let runMode='single', pollTimer=null;
+let _sessAnalyzed=[], _lastRunCount=-1, _lastUpdatedAt='', _sessTypeFilter='all';
+let _sessionAnalytics=null, _sessionProviderFilter='all', _jobResults=[], _jobProviderFilter='all';
+let _savedGroupFilter=null; // null = show all groups
+
+setInterval(function(){ document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').split('.')[0]+' UTC'; },1000);
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(n){
+  document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',['paste','file','saved','api'][i]===n);});
+  document.querySelectorAll('.tc').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('tab-'+n).classList.add('active');
+  if(n==='saved') loadSessionGroups().then(function(){renderSaved();});
+  if(n==='api') refreshApiTab();
+}
+
+// ── Mode ───────────────────────────────────────────────────────────────────
+function setMode(m){
+  runMode=m;
+  document.getElementById('mSingle').classList.toggle('active',m==='single');
+  document.getElementById('mMulti').classList.toggle('active',m==='multi');
+  document.getElementById('multiCfg').style.display=m==='multi'?'block':'none';
+  if(m==='multi') refreshSessSelect();
+}
+
+// ── Saved lists ────────────────────────────────────────────────────────────
+function getLists(){ try{return JSON.parse(localStorage.getItem('proxyLists')||'{}');}catch{return{};} }
+function setLists(l){ localStorage.setItem('proxyLists',JSON.stringify(l)); }
+function countLines(t){ return t.split('\n').filter(function(l){return l.trim()&&!l.trim().startsWith('#');}).length; }
+function countPaste(){
+  var n=countLines(document.getElementById('pasteArea').value);
+  var el=document.getElementById('pasteCounter');
+  el.textContent=n.toLocaleString()+' proxies'; el.className='pcnt'+(n?' has':'');
+}
+function persistList(name,text,proxyType,groupId){
+  var lists=getLists(), id='list_'+Date.now(), n=countLines(text);
+  lists[id]={id,name,text,count:n,saved:new Date().toISOString(),
+    proxy_type:proxyType||'residential',group_id:groupId||null};
+  setLists(lists); updateSavedTab();
+  toast('Saved "'+name+'" — '+n.toLocaleString()+' proxies');
+  autoSyncListToProvider(name,text);
+}
+async function autoSyncListToProvider(name,text){
+  try{
+    var fd=new FormData();
+    fd.append('provider_name',name);
+    fd.append('file',new Blob([text],{type:'text/plain'}),name+'.txt');
+    var r=await fetch(API+'/api/providers',{method:'POST',body:fd});
+    if(!r.ok) return;
+    var d=await r.json();
+    localStorage.setItem('pvSync_'+name,d.id);
+  }catch(e){}
+}
+async function saveFromPaste(){
+  var text=document.getElementById('pasteArea').value.trim();
+  if(!text){toast('Nothing to save.',true);return;}
+  var name=document.getElementById('pasteName').value.trim();
+  if(!name){toast('Enter a list name.',true);return;}
+  var groupId=await pickGroupForSave();
+  if(groupId===false) return; // user cancelled
+  persistList(name,text,document.getElementById('proxyType').value||'residential',groupId);
+}
+async function saveFromFile(){
+  if(!selectedFile){toast('No file selected.',true);return;}
+  var name=await appPrompt('List name:',selectedFile.name.replace(/\.[^.]+$/,''));
+  if(!name||!name.trim())return;
+  var groupId=await pickGroupForSave();
+  if(groupId===false) return;
+  persistList(name.trim(),await selectedFile.text(),document.getElementById('proxyType').value||'residential',groupId);
+}
+function updateSavedTab(){
+  var c=Object.keys(getLists()).length;
+  document.getElementById('savedTab').textContent=c?'GROUPS ('+c+')':'GROUPS';
+  renderSaved();
+}
+function renderSaved(){
+  var lists=getLists(), ids=Object.keys(lists).sort(function(a,b){return b.localeCompare(a);});
+  var el=document.getElementById('savedEl');
+
+  // Group filter strip
+  var groupStripHtml='<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--bg);">'
+    +'<button class="filter-btn'+(_savedGroupFilter===null?' active':'')+'" onclick="setSavedGroupFilter(null)">ALL ('+ids.length+')</button>';
+  _sgData.forEach(function(g){
+    var cnt=ids.filter(function(id){return lists[id]&&lists[id].group_id===g.id;}).length;
+    groupStripHtml+='<button class="filter-btn'+(_savedGroupFilter===g.id?' active':'')+'" onclick="setSavedGroupFilter(\''+g.id+'\')">'
+      +esc(g.name)+(cnt?' ('+cnt+')':' (0)')+'</button>';
+  });
+  groupStripHtml+='</div>';
+
+  if(!ids.length){
+    el.innerHTML=groupStripHtml+'<div class="empty">No saved lists yet.<br><span style="font-size:11px">Click SAVE on the PASTE or FILE tabs to add one.</span></div>';
+    document.getElementById('useSavedBtn').disabled=true;
+    return;
+  }
+
+  var filtered=ids.filter(function(id){
+    if(_savedGroupFilter===null) return true;
+    return lists[id]&&lists[id].group_id===_savedGroupFilter;
+  });
+
+  if(!filtered.length){
+    el.innerHTML=groupStripHtml+'<div class="empty">No lists in this group.</div>';
+    document.getElementById('useSavedBtn').disabled=true;
+    return;
+  }
+
+  el.innerHTML=groupStripHtml+filtered.map(function(id){
+    var l=lists[id], sel=selectedSavedId===id?' selected':'';
+    var pt=l.proxy_type||'residential';
+    var ptLabel=pt==='residential'?'RESI':pt==='isp'?'ISP':'MIXED';
+    var ptCls=pt==='residential'?'resi':pt==='isp'?'isp':'mixed';
+    var gName='';
+    if(l.group_id&&_savedGroupFilter===null){
+      var grp=_sgData.find(function(g){return g.id===l.group_id;});
+      if(grp) gName=' · '+esc(grp.name);
+    }
+    return '<div class="sli'+sel+'" onclick="selectSaved(\''+id+'\')">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="sli-name"><span class="type-pill '+ptCls+'">'+ptLabel+'</span> '+esc(l.name)+'</div>'
+      +'<div class="sli-meta">'+l.count.toLocaleString()+' · '+new Date(l.saved).toLocaleDateString()+gName+'</div>'
+      +'</div>'
+      +'<button class="ibt" onclick="renameSaved(event,\''+id+'\')">✎</button>'
+      +'<button class="ibt del" onclick="deleteSaved(event,\''+id+'\')">✕</button>'
+      +'</div>';
+  }).join('');
+}
+function setSavedGroupFilter(gid){
+  _savedGroupFilter=gid;
+  selectedSavedId=null;
+  document.getElementById('useSavedBtn').disabled=true;
+  renderSaved();
+}
+function selectSaved(id){ selectedSavedId=id; renderSaved(); document.getElementById('useSavedBtn').disabled=false; }
+function deleteSaved(e,id){ e.stopPropagation(); var l=getLists(); if(!confirm('Delete "'+l[id].name+'"?'))return; delete l[id]; setLists(l); if(selectedSavedId===id)selectedSavedId=null; updateSavedTab(); }
+function renameSaved(e,id){ e.stopPropagation(); appPrompt('New list name:',getLists()[id]&&getLists()[id].name||'').then(function(n){if(n&&n.trim()){var l=getLists();l[id].name=n.trim();setLists(l);renderSaved();}}); }
+
+// ── File ───────────────────────────────────────────────────────────────────
+var dz=document.getElementById('dz'), fi=document.getElementById('fi');
+dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('over');});
+dz.addEventListener('dragleave',function(){dz.classList.remove('over');});
+dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])setFile(e.dataTransfer.files[0]);});
+fi.addEventListener('change',function(){if(fi.files[0])setFile(fi.files[0]);});
+function setFile(f){ selectedFile=f; document.getElementById('fileInfo').textContent='✓ '+f.name+' ('+(f.size/1024).toFixed(1)+' KB)'; }
+
+// ── Source ─────────────────────────────────────────────────────────────────
+function useSource(type){
+  var ind=document.getElementById('srcInd');
+  if(type==='paste'){
+    var text=document.getElementById('pasteArea').value.trim();
+    if(!text){toast('Paste proxies first.',true);return;}
+    var name=document.getElementById('pasteName').value.trim()||'Pasted List';
+    activeSource={type:'paste',name,text};
+    ind.textContent='✓ '+name+' — '+countLines(text).toLocaleString()+' proxies'; ind.className='src-ind active';
+  } else if(type==='file'){
+    if(!selectedFile){toast('Select a file first.',true);return;}
+    activeSource={type:'file',name:selectedFile.name,file:selectedFile};
+    ind.textContent='✓ '+selectedFile.name; ind.className='src-ind active';
+  } else if(type==='saved'){
+    if(!selectedSavedId){toast('Select a list first.',true);return;}
+    var l=getLists()[selectedSavedId];
+    activeSource={type:'saved',name:l.name,text:l.text};
+    ind.textContent='✓ '+l.name+' — '+l.count.toLocaleString()+' proxies'; ind.className='src-ind active';
+  }
+  toast('Ready: '+activeSource.name);
+}
+
+function buildFD(){
+  var fd=new FormData();
+  fd.append('test_url',document.getElementById('testUrl').value||'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting');
+  fd.append('concurrency',document.getElementById('concurrency').value);
+  fd.append('timeout',document.getElementById('timeout').value);
+  fd.append('retries',document.getElementById('retries').value);
+  fd.append('top_n',document.getElementById('topN').value);
+  if(activeSource.type==='file') fd.append('file',activeSource.file);
+  else fd.append('file',new Blob([activeSource.text],{type:'text/plain'}),activeSource.name+'.txt');
+  fd.append('proxy_type', (document.getElementById('proxyType')||{value:'residential'}).value||'residential');
+  return fd;
+}
+
+// ── Submit ─────────────────────────────────────────────────────────────────
+async function submitJob(){
+  if(!activeSource){toast('Select a proxy list first.',true);return;}
+  var btn=document.getElementById('startBtn');
+  btn.disabled=true; btn.textContent='⟳ STARTING...';
+  try{
+    if(runMode==='single') await startSingle();
+    else await startMulti();
+    startPolling();
+  }catch(e){toast(e.message,true);}
+  finally{btn.disabled=false;btn.textContent='▶ START TEST';}
+}
+async function startSingle(){
+  dbgLog('Single run started: '+activeSource.name);
+  var r=await fetch(API+'/api/jobs',{method:'POST',body:buildFD()});
+  if(!r.ok){var e=await r.json();dbgLog('Single run error: '+(e.error||'Error'),'err');throw new Error(e.error||'Error');}
+  var d=await r.json();
+  dbgLog('Job created: '+d.job_id+' — '+d.total_proxies+' proxies','ok');
+  toast('Job started — '+d.total_proxies.toLocaleString()+' proxies');
+}
+async function startMulti(){
+  dbgLog('Multi-pass started: '+activeSource.name);
+  var passes=parseInt(document.getElementById('autoPasses').value)||3;
+  var existSid=document.getElementById('sessSelect').value;
+  if(existSid){
+    var r=await fetch(API+'/api/sessions/'+existSid+'/run',{method:'POST',body:'{}'});
+    if(!r.ok){var e=await r.json();throw new Error(e.error||'Error');}
+    activeSessionId=existSid; _lastRunCount=-1; toast('Run started'); return;
+  }
+  var fd=buildFD(); fd.append('session_name',activeSource.name);
+  var r=await fetch(API+'/api/sessions',{method:'POST',body:fd});
+  if(!r.ok){var e=await r.json();throw new Error(e.error||'Error');}
+  var d=await r.json();
+  activeSessionId=d.session_id; _lastRunCount=-1;
+  dbgLog('Session created: '+d.session_id+' — '+d.proxy_count+' proxies, '+passes+' passes','ok');
+  toast('Session created — '+d.proxy_count.toLocaleString()+' proxies. Starting '+passes+' passes...');
+  var pvSyncId=localStorage.getItem('pvSync_'+activeSource.name);
+  if(pvSyncId){
+    fetch(API+'/api/providers/'+pvSyncId+'/link-session',{
+      method:'POST',body:JSON.stringify({session_id:d.session_id}),
+      headers:{'Content-Type':'application/json'}
+    }).catch(function(){});
+  }
+  runPassesSeq(d.session_id,passes,1);
+}
+async function runPassesSeq(sid,total,num){
+  if(num>total) return;
+  var r=await fetch(API+'/api/sessions/'+sid+'/run',{method:'POST',body:'{}'});
+  if(!r.ok) return;
+  var d=await r.json();
+  toast('Pass '+num+' of '+total+' running...');
+  var jid=d.job_id;
+  var iv=setInterval(async function(){
+    try{
+      var jr=await fetch(API+'/api/jobs/'+jid);
+      var jd=await jr.json();
+      if(jd.status==='done'||jd.status==='error'){
+        clearInterval(iv);
+        if(num<total) setTimeout(function(){runPassesSeq(sid,total,num+1);},400);
+        else toast('All '+total+' passes complete!');
+      }
+    }catch(e){clearInterval(iv);}
+  },2500);
+}
+async function addRunToSession(){
+  if(!activeSessionId) return;
+  var btn=document.getElementById('addRunBtn');
+  btn.disabled=true; btn.textContent='STARTING...';
+  try{
+    var r=await fetch(API+'/api/sessions/'+activeSessionId+'/run',{method:'POST',body:'{}'});
+    if(!r.ok){var e=await r.json();throw new Error(e.error);}
+    var d=await r.json(); toast('Run '+d.run_number+' started'); startPolling();
+  }catch(e){toast(e.message,true);}
+  finally{btn.disabled=false;btn.textContent='+ RUN AGAIN';}
+}
+async function refreshSessSelect(){
+  var sel=document.getElementById('sessSelect'), wrap=document.getElementById('sessSelectWrap');
+  try{
+    var r=await fetch(API+'/api/sessions'), list=await r.json();
+    if(list.length){
+      wrap.style.display='block';
+      sel.innerHTML='<option value="">— New session —</option>'+list.map(function(s){return '<option value="'+s.session_id+'">'+esc(s.name)+' ('+s.run_count+' runs)</option>';}).join('');
+    }else{wrap.style.display='none';}
+  }catch(e){}
+}
+
+// ── Polling ────────────────────────────────────────────────────────────────
+function startPolling(){
+  if(pollTimer)clearInterval(pollTimer);
+  doRefresh();
+  pollTimer=setInterval(doRefresh,2000);
+}
+async function doRefresh(){
+  try{
+    var [jr,sr]=await Promise.all([fetch(API+'/api/jobs'),fetch(API+'/api/sessions')]);
+    var allJobs=await jr.json(), allSess=await sr.json();
+    renderSessions(allSess,allJobs);
+    if(activeSessionId) await updateSessionDetail(allSess,allJobs);
+    if(activeJobId){
+      var aj=allJobs.find(function(j){return j.job_id===activeJobId;});
+      if(aj&&aj.status==='done'&&document.getElementById('resPanel').style.display==='none') loadJobResults(activeJobId);
+    }
+    renderJobs(allJobs.filter(function(j){return !j.session_id;}));
+    var busy=allJobs.some(function(j){return j.status==='running'||j.status==='queued';})
+           ||allSess.some(function(s){return s.status==='running';});
+    if(!busy&&pollTimer){clearInterval(pollTimer);pollTimer=null;}
+    // Cross-session comparison (only when 2+ sessions exist)
+    if(allSess.length>=2){
+      try{
+        var cr=await fetch(API+'/api/sessions/compare');
+        if(cr.ok) renderCompare(await cr.json());
+      }catch(e2){}
+    } else {
+      document.getElementById('comparePanel').style.display='none';
+    }
+  }catch(e){}
+}
+
+// ── IP Analysis render ─────────────────────────────────────────────────────
+function ipTypeDot(type){
+  var cls={residential:'dot-residential',mobile:'dot-mobile',datacenter:'dot-datacenter',
+           flagged_proxy:'dot-flagged',private:'dot-private',unknown:'dot-unknown'}[type]||'dot-unknown';
+  return '<span class="type-dot '+cls+'"></span>';
+}
+function ipTypeLabel(type){
+  return {residential:'RESIDENTIAL',mobile:'MOBILE',datacenter:'DATACENTER',
+          flagged_proxy:'FLAGGED',private:'PRIVATE',unknown:'UNKNOWN'}[type]||'UNKNOWN';
+}
+function ipTypeColor(type){
+  return {residential:'var(--residential)',mobile:'var(--mobile)',datacenter:'var(--datacenter)',
+          flagged_proxy:'var(--flagged)',private:'#ff00ff',unknown:'var(--unknown)'}[type]||'var(--unknown)';
+}
+
+function renderAnalysis(a, containerId){
+  if(!a||!a.total_passed){return;}
+  var panel=document.getElementById(containerId);
+  if(!panel) return;
+  panel.style.display='block';
+  var contentEl=document.getElementById(containerId+'Content')
+    || document.getElementById(containerId.replace(/Panel$/,'Content'))
+    || panel.querySelector('div[id$="AnalysisContent"]');
+  if(!contentEl) return;
+
+  var scoreColor = a.quality_score>=70?'var(--accent)':a.quality_score>=40?'#ffcc00':'var(--fail)';
+  var scoreLabel = a.quality_score>=70?'GOOD POOL':a.quality_score>=40?'MIXED POOL':'POOR POOL';
+
+  var alerts='';
+  if(a.private_count>0) alerts+='<div class="alert-box alert-bad">⚠ '+a.private_count+' private IP leaks (RFC1918) — provider infrastructure bug</div>';
+  if(a.datacenter_pct>10) alerts+='<div class="alert-box alert-bad">⚠ '+a.datacenter_pct+'% datacenter IPs — will be flagged by anti-bot systems</div>';
+  else if(a.datacenter_count>0) alerts+='<div class="alert-box alert-warn">⚡ '+a.datacenter_count+' datacenter IPs detected and excluded from copy</div>';
+  if(a.reuse_rate_pct>30) alerts+='<div class="alert-box alert-bad">⚠ '+a.reuse_rate_pct+'% IP reuse rate — pool is smaller than session count implies</div>';
+  else if(a.reuse_rate_pct>10) alerts+='<div class="alert-box alert-warn">⚡ '+a.reuse_rate_pct+'% IP reuse — some IPs shared across sessions</div>';
+  if(a.flagged_count>0) alerts+='<div class="alert-box alert-warn">⚡ '+a.flagged_count+' proxies flagged as proxy/VPN by ip-api</div>';
+  if(a.quality_score>=70&&!alerts) alerts='<div class="alert-box alert-good">✓ Pool looks clean — good residential diversity</div>';
+
+  // Type breakdown bars
+  var types=[
+    {k:'residential',label:'Residential',count:a.residential_count},
+    {k:'mobile',label:'Mobile',count:a.mobile_count},
+    {k:'unknown',label:'Unknown',count:a.unknown_count},
+    {k:'flagged_proxy',label:'Flagged',count:a.flagged_count},
+    {k:'datacenter',label:'Datacenter',count:a.datacenter_count},
+    {k:'private',label:'Private IP',count:a.private_count},
+  ].filter(function(t){return t.count>0;});
+
+  var typeBars=types.map(function(t){
+    var pct=a.total_passed>0?Math.round(t.count/a.total_passed*100):0;
+    return '<div class="type-bar-row">'
+      +'<div class="type-bar-label">'+ipTypeDot(t.k)+t.label+'</div>'
+      +'<div class="type-bar-track"><div class="type-bar-fill" style="width:'+pct+'%;background:'+ipTypeColor(t.k)+'"></div></div>'
+      +'<div class="type-bar-val">'+pct+'%</div>'
+      +'</div>';
+  }).join('');
+
+  // Top ASNs
+  var maxAsn=a.top_asns[0]?a.top_asns[0].count:1;
+  var asnRows=(a.top_asns||[]).map(function(x){
+    var bw=Math.round((x.count/maxAsn)*60);
+    return '<div class="asn-row"><div class="asn-bar" style="width:'+bw+'px"></div><div class="asn-name">'+esc(x.asn)+'</div><div class="asn-count">'+x.count+'</div></div>';
+  }).join('');
+
+  // Reused IPs
+  var reuseRows=(a.top_reused_ips||[]).slice(0,8).map(function(x){
+    return '<div class="reuse-row"><span class="reuse-ip">'+x.ip+'</span><span class="reuse-count">×'+x.count+'</span></div>';
+  }).join('');
+
+  var html='<div style="padding:12px 16px">'+alerts+'</div>'
+    +'<div class="analysis-grid">'
+    +'<div class="analysis-cell"><div class="analysis-title">POOL QUALITY SCORE</div>'
+    +'<div class="quality-score" style="color:'+scoreColor+'">'+a.quality_score+'<span style="font-size:16px;color:var(--muted)">/100</span></div>'
+    +'<div class="quality-label">'+scoreLabel+'</div>'
+    +'<div style="margin-top:10px;font-size:11px;color:var(--muted)">'
+    +'<div>'+a.unique_ips.toLocaleString()+' unique IPs from '+a.total_with_ip.toLocaleString()+' tested</div>'
+    +'<div>'+a.reuse_rate_pct+'% reuse rate</div>'
+    +'</div></div>'
+    +'<div class="analysis-cell"><div class="analysis-title">IP TYPE BREAKDOWN</div><div class="type-bars">'+typeBars+'</div></div>'
+    +'<div class="analysis-cell"><div class="analysis-title">TOP ASNs</div><div class="asn-list">'+asnRows+'</div></div>'
+    +'<div class="analysis-cell"><div class="analysis-title">MOST REUSED IPs</div>'
+    +(reuseRows?'<div class="reuse-list">'+reuseRows+'</div>':'<div style="font-size:11px;color:var(--muted)">No IP reuse detected ✓</div>')
+    +'</div>'
+    +'</div>';
+
+  contentEl.innerHTML=html;
+}
+
+// ── Sessions ───────────────────────────────────────────────────────────────
+function renderSessions(list,allJobs){
+  document.getElementById('sessCount').textContent=list.length+' session'+(list.length!==1?'s':'');
+  var el=document.getElementById('sessionsList');
+  if(!list.length){el.innerHTML='<div class="empty">No sessions. Use Multi-Pass mode.</div>';return;}
+  el.innerHTML=list.map(function(s){
+    var sjobs=allJobs.filter(function(j){return j.session_id===s.session_id;});
+    var running=sjobs.some(function(j){return j.status==='running'||j.status==='queued';});
+    var sel=activeSessionId===s.session_id?' sel':'';
+    var isActive=activeSessionId===s.session_id&&document.getElementById('sessDetail').style.display!=='none';
+    return '<div class="sess-card'+sel+'" onclick="selectSession(\''+s.session_id+'\')" oncontextmenu="sessCtxMenu(event,\''+s.session_id+'\')">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">'
+      +'<div class="sess-name">'+esc(s.name)+'</div>'
+      +(s.proxy_type?'<span class="type-pill '+(s.proxy_type==='residential'?'resi':s.proxy_type==='isp'?'isp':'mixed')+'">'+s.proxy_type.toUpperCase()+'</span>':'<span class="type-pill resi">RESI</span>')
+      +(running?'<span class="badge b-run">RUNNING</span>':'<span class="badge b-done">IDLE</span>')
+      +'</div>'
+      +'<div class="sess-meta"><span class="g">'+s.run_count+' runs</span><span>'+s.proxy_count.toLocaleString()+' proxies</span>'
+      +(s.updated_at?'<span>'+new Date(s.updated_at).toLocaleString()+'</span>':'')+'</div>'
+      +'<span class="toggle-hint">'+(isActive?'click to hide ▲':'click to view ▼')+'</span>'
+      +'</div>';
+  }).join('');
+}
+
+async function selectSession(sid){
+  // Toggle: clicking the active session hides its detail panel
+  if(activeSessionId===sid && document.getElementById('sessDetail').style.display!=='none'){
+    activeSessionId=null;
+    document.getElementById('sessDetail').style.display='none';
+    doRefresh(); // re-render to clear .sel class
+    return;
+  }
+  activeSessionId=sid; _lastRunCount=-1; _lastUpdatedAt=''; _sessionProviderFilter='all'; _sessionAnalytics=null;
+  document.getElementById('sessDetail').style.display='block';
+  await doRefresh();
+}
+
+async function updateSessionDetail(allSess,allJobs){
+  var s=allSess.find(function(x){return x.session_id===activeSessionId;});
+  if(!s) return;
+  document.getElementById('sessDetailName').textContent=s.name;
+  document.getElementById('sdTotal').textContent=s.proxy_count.toLocaleString();
+  document.getElementById('sdRuns').textContent=s.run_count;
+  document.getElementById('sdPassed').textContent=s.passed_all!==undefined?s.passed_all.toLocaleString():'—';
+  document.getElementById('sdStatus').textContent=s.status==='running'?'RUNNING':'IDLE';
+  document.getElementById('sdStatus').className='stat-v'+(s.status==='running'?' g':'');
+  document.getElementById('minPassesLabel').textContent='of '+s.run_count+' runs';
+  var runsSummary=document.getElementById('sessRunsSummary');
+  if(runsSummary) runsSummary.textContent='⬡ RUN HISTORY ('+s.run_count+' run'+(s.run_count!==1?'s':'')+')';
+
+
+  var sjobs=allJobs.filter(function(j){return j.session_id===activeSessionId;});
+  document.getElementById('runsList').innerHTML=sjobs.length
+    ? sjobs.map(function(j,i){
+        var pct=j.progress_pct||0;
+        var badge=j.status==='running'?'<span class="badge b-run">RUNNING</span>'
+          :j.status==='done'?'<span class="badge b-done">DONE</span>'
+          :'<span class="badge b-q">QUEUED</span>';
+        var eta=j.eta_sec&&j.status==='running'?' · ETA '+j.eta_sec+'s':'';
+        return '<div class="job-card"><div class="job-top"><div class="job-name">Run '+(i+1)+'</div>'+badge+'</div>'
+          +'<div class="job-meta"><span class="g">'+j.passed.toLocaleString()+' passed</span>'
+          +'<span class="r">'+j.failed.toLocaleString()+' failed</span>'
+          +'<span>'+(j.tested||0).toLocaleString()+'/'+j.total.toLocaleString()+'</span>'
+          +'<span>'+Math.round(j.progress_pct||0)+'%'+eta+'</span></div>'
+          +'<div class="prog-wrap"><div class="prog-bar" style="width:'+pct+'%"></div></div></div>';
+      }).join('')
+    : '<div class="empty" style="padding:12px">No runs yet.</div>';
+
+  var updatedAt=s.updated_at||'';
+  if(updatedAt !== _lastUpdatedAt){
+    _lastRunCount=s.run_count;
+    _lastUpdatedAt=updatedAt;
+    var [r,ar]=await Promise.all([
+      fetch(API+'/api/sessions/'+activeSessionId+'/results?limit=1000'),
+      fetch(API+'/api/sessions/'+activeSessionId+'/analytics')
+    ]);
+    if(r.ok){
+      var d=await r.json();
+      _sessAnalyzed=d.proxies||[];
+      if(d.ip_analysis) renderAnalysis(d.ip_analysis,'sessAnalysisPanel');
+    }
+    if(ar.ok){
+      var analytics=await ar.json();
+      _sessionAnalytics=analytics;
+      renderSessionAnalytics(analytics);
+    }
+  }
+  renderSessResults();
+}
+
+function setSessFilter(f){
+  _sessTypeFilter=f;
+  ['all','residential','mobile','unknown','datacenter'].forEach(function(k){
+    var el=document.getElementById('sf-'+k);
+    if(el) el.classList.toggle('active', k===f);
+  });
+  renderSessResults();
+}
+
+function groupByEgressIP(proxies){
+  var map={};
+  proxies.forEach(function(a){
+    var ip=a.egress_ip||'';
+    var key=ip||('__'+( a.proxy?a.proxy.host+':'+a.proxy.port : a.host+':'+a.port));
+    if(a.ip_type==='residential' && ip){
+      var parts=String(ip).split('.');
+      if(parts.length===4) key=parts.slice(0,3).join('.')+'.*';
+    }
+    if(!map[key]){
+      map[key]={
+        egress_ip:key,
+        ip_type:a.ip_type||'unknown',
+        ip_info:a.ip_info||null,
+        items:[]
+      };
+    }
+    map[key].items.push(a);
+  });
+  var typeOrd={residential:0,mobile:1,unknown:2,flagged_proxy:3,datacenter:4,private:5};
+  return Object.values(map).sort(function(a,b){
+    var ao=typeOrd[a.ip_type]!==undefined?typeOrd[a.ip_type]:2;
+    var bo=typeOrd[b.ip_type]!==undefined?typeOrd[b.ip_type]:2;
+    if(ao!==bo) return ao-bo;
+    var aMs=a.items.reduce(function(s,x){return s+(x.mean_lat||x.avg_ms||0);},0)/a.items.length;
+    var bMs=b.items.reduce(function(s,x){return s+(x.mean_lat||x.avg_ms||0);},0)/b.items.length;
+    return aMs-bMs;
+  });
+}
+
+function typeHdrClass(t){
+  return {residential:'resi',mobile:'mobile',datacenter:'dc',flagged_proxy:'flagged',private:'private'}[t]||'unknown';
+}
+
+function renderIPGroups(containerId, emptyId, groups, isSess){
+  var el=document.getElementById(containerId);
+  var emptyEl=document.getElementById(emptyId);
+  if(!groups.length){el.innerHTML='';if(emptyEl)emptyEl.style.display='block';return;}
+  if(emptyEl) emptyEl.style.display='none';
+
+  el.innerHTML='<div class="ip-groups">'+groups.map(function(g,gi){
+    var info=g.ip_info||{};
+    var isp=esc((info.isp||info.org||'Unknown ISP').slice(0,48));
+    var location=esc(locationLabelFor({ip_info:info}));
+    var avgMs=Math.round(g.items.reduce(function(s,x){return s+(getLatencyFor(x)||0);},0)/g.items.length);
+    var bestMs=Math.min.apply(null,g.items.map(function(x){ return getLatencyFor(x)||999999; }));
+    var avgConsistency=Math.round(g.items.reduce(function(s,x){ return s+getConsistencyFor(x); },0)/g.items.length*100);
+    var avgScore=Math.round(g.items.reduce(function(s,x){ return s+getItemScore(x); },0)/g.items.length);
+    var msClass=avgMs<300?'lat-g':avgMs<700?'lat-o':'lat-s';
+    var crowded=g.items.length>1;
+    var typeColor=ipTypeColor(g.ip_type);
+    var typeLabel=ipTypeLabel(g.ip_type);
+    var subnet=g.egress_ip?g.egress_ip.split('.').slice(0,3).join('.')+'.*':'';
+
+    var hdr='<div class="ip-group-hdr '+typeHdrClass(g.ip_type)+'" onclick="toggleGroup(\'ig'+gi+'\')">'
+      +ipTypeDot(g.ip_type)
+      +'<span class="ip-addr" style="color:'+typeColor+'">'+(g.egress_ip||'No egress IP')+'</span>'
+      +'<span class="ip-isp">'+isp+' · '+location+'</span>'
+      +'<div class="ip-stats">'
+      +(crowded?'<span class="ip-chip warn">×'+g.items.length+' creds</span>':'<span class="ip-chip score">unique</span>')
+      +'<span class="ip-chip" style="color:'+typeColor+'">'+typeLabel+'</span>'
+      +'<span class="ip-chip '+(avgScore>=75?'score':avgScore>=45?'':'bad')+'">score '+avgScore+'</span>'
+      +'<span class="ip-chip">'+avgConsistency+'% stable</span>'
+      +'<span class="ip-chip '+(avgMs<300?'score':avgMs<700?'warn':'bad')+'">'+avgMs+'ms avg</span>'
+      +(bestMs<999999?'<span class="ip-chip">'+bestMs+'ms best</span>':'')
+      +(subnet?'<span class="ip-chip">'+subnet+'</span>':'')
+      +'</div>'
+      +'<span class="ip-toggle">▶</span>'
+      +'</div>';
+
+    var rows=g.items.map(function(a){
+      var p=getProxyFor(a);
+      var ms=getLatencyFor(a)||0;
+      var score=getItemScore(a);
+      var loc=locationLabelFor(a);
+      var passText=isSess?(a.pass_count+'/'+a.run_count+' passes'):(Math.round((a.success_rate||0)*100)+'% success');
+      var consistencyPct=Math.round(getConsistencyFor(a)*100);
+      var typeText=ipTypeLabel(a.ip_type||'unknown');
+      var provider=providerNameFor(a);
+      var org=(a.ip_info&&a.ip_info.org)?a.ip_info.org:provider;
+      var spark='';
+      if(isSess&&a.score_history&&a.score_history.length){
+        var hist=a.score_history.slice(0,10);
+        var maxS=Math.max.apply(null,hist.map(function(v){return v||0.001;}));
+        spark='<div class="ip-spark">'+hist.map(function(v){
+          var h=maxS>0?Math.max(2,Math.round((v/maxS)*14)):2;
+          var c=v>=(maxS*.8)?'var(--accent)':v>=(maxS*.5)?'var(--gold)':'var(--fail)';
+          return '<div class="ip-spark-bar" style="height:'+h+'px;background:'+c+'"></div>';
+        }).join('')+'</div>';
+      }
+      return '<div class="ip-cred-row">'
+        +'<div class="ip-cred-cell">'
+        +'<div class="ip-cred-main">'
+        +'<span class="ip-cred" title="'+esc(proxyLineForItem(a))+'">'+esc((p.username?p.username+'@':'')+p.host+':'+p.port)+'</span>'
+        +'<span class="ip-chip '+(score>=75?'score':score>=45?'warn':'bad')+'">score '+score+'</span>'
+        +'<span class="ip-chip '+(ms<300?'score':ms<700?'warn':'bad')+'">'+ms+'ms</span>'
+        +'<span class="ip-chip">'+consistencyPct+'% consistency</span>'
+        +(a.egress_ip?'<span class="ip-chip">'+a.egress_ip+'</span>':'')
+        +spark
+        +'</div>'
+        +'<div class="ip-cred-meta">'
+        +'<span class="ip-chip">'+esc(typeText)+'</span>'
+        +'<span class="ip-chip">'+esc(passText)+'</span>'
+        +'<span class="ip-chip">'+esc(provider)+'</span>'
+        +'<span class="ip-chip">'+esc(org)+'</span>'
+        +'<span class="ip-chip">'+esc(loc)+'</span>'
+        +(a.ip_info&&a.ip_info.mobile?'<span class="ip-chip score">mobile</span>':'')
+        +(a.ip_info&&a.ip_info.hosting?'<span class="ip-chip bad">hosting</span>':'')
+        +(a.ip_info&&a.ip_info.proxy?'<span class="ip-chip bad">proxy-flagged</span>':'')
+        +'</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+
+    return '<div class="ip-group open" id="ig'+gi+'"><div>'+hdr+'</div>'
+      +'<div class="ip-group-body">'+rows+'</div></div>';
+  }).join('')+'</div>';
+}
+
+function toggleGroup(id){
+  var el=document.getElementById(id);
+  if(el) el.classList.toggle('open');
+}
+
+function providerNameFor(item){
+  var info=item&&item.ip_info?item.ip_info:null;
+  return (info&&(info.isp||info.org||info.as))||'Unknown ISP';
+}
+function locationLabelFor(item){
+  var info=item&&item.ip_info?item.ip_info:null;
+  if(!info) return 'Unknown location';
+  var bits=[info.city,info.region,info.country].filter(function(x){ return x&&String(x).trim(); });
+  return bits.length?bits.join(', '):'Unknown location';
+}
+function getProxyFor(item){ return item.proxy||item; }
+function getLatencyFor(item){ return item.mean_lat!=null?item.mean_lat:(item.avg_ms!=null?item.avg_ms:null); }
+function getConsistencyFor(item){ return item.pass_count!=null&&item.run_count!=null ? item.pass_count/Math.max(item.run_count,1) : (item.success_rate||0); }
+function getTypeWeight(item){ return {residential:1,mobile:0.8,unknown:0.45,flagged_proxy:0.1,datacenter:0,private:0}[item.ip_type] ?? 0.45; }
+function getItemScore(item){
+  if(item.composite_score!=null) return item.composite_score;
+  if(item.mean_score!=null) return Math.round(item.mean_score*100);
+  if(item.score!=null) return Math.round(item.score*100);
+  return Math.round(getConsistencyFor(item)*45 + Math.max(0,100-Math.min(100,getLatencyFor(item)||1000)/10)*0.35 + getTypeWeight(item)*20);
+}
+function proxyLineForItem(item){
+  var p=getProxyFor(item);
+  return p.username?(p.host+':'+p.port+':'+p.username+':'+(p.password||'')):(p.host+':'+p.port);
+}
+function uniqueIpCount(items){
+  return Object.keys(items.reduce(function(out,item){ if(item.egress_ip) out[item.egress_ip]=1; return out; },{})).length;
+}
+function downloadTextFile(name,text){
+  var blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+function topValues(items, mapper, limit){
+  var counts={};
+  items.forEach(function(item){
+    var value=mapper(item);
+    if(!value) return;
+    counts[value]=(counts[value]||0)+1;
+  });
+  return Object.keys(counts).sort(function(a,b){ return counts[b]-counts[a]; }).slice(0,limit||3);
+}
+function buildProviderSummary(name, items, minMs, msRange){
+  var count=items.length;
+  var avgMs=Math.round(items.reduce(function(sum,item){ return sum+(getLatencyFor(item)||0); },0)/Math.max(count,1));
+  var minLatency=Math.min.apply(null,items.map(function(item){ return getLatencyFor(item)||999999; }));
+  var consistencyPct=Math.round(items.reduce(function(sum,item){ return sum+getConsistencyFor(item); },0)/Math.max(count,1)*100);
+  var residentialCount=items.filter(function(item){ return item.ip_type==='residential'; }).length;
+  var datacenterCount=items.filter(function(item){ return item.ip_type==='datacenter'||item.ip_type==='private'||item.ip_type==='flagged_proxy'; }).length;
+  var speedScore=avgMs?Math.max(0,1-((avgMs-minMs)/Math.max(msRange,1))):0;
+  var residentialPct=Math.round(residentialCount/Math.max(count,1)*100);
+  var datacenterPct=Math.round(datacenterCount/Math.max(count,1)*100);
+  var withIp=items.filter(function(item){ return item.egress_ip; }).length;
+  var uniqueIps=uniqueIpCount(items);
+  var uniquenessPct=withIp?Math.round(uniqueIps/withIp*100):0;
+  var typeCounts={};
+  items.forEach(function(item){ var type=item.ip_type||'unknown'; typeCounts[type]=(typeCounts[type]||0)+1; });
+  var dominantType=Object.keys(typeCounts).sort(function(a,b){ return typeCounts[b]-typeCounts[a]; })[0]||'unknown';
+  var avgScore=Math.round(items.reduce(function(sum,item){ return sum+getItemScore(item); },0)/Math.max(count,1));
+  var topLocations=topValues(items,function(item){ return locationLabelFor(item); },3);
+  var topRegions=topValues(items,function(item){ var info=item&&item.ip_info?item.ip_info:null; return info&&info.country?info.country:null; },3);
+  var crowdedPct=withIp?Math.round((1-(uniqueIps/Math.max(withIp,1)))*100):0;
+  var score=Math.round(consistencyPct*0.35 + speedScore*30 + uniquenessPct*0.15 + residentialPct*0.15 + Math.max(0,100-datacenterPct*2)*0.05);
+  return {
+    name:name, items:items, avgMs:avgMs, minLatency:isFinite(minLatency)?minLatency:null,
+    consistencyPct:consistencyPct, residentialPct:residentialPct, datacenterPct:datacenterPct,
+    uniqueIps:uniqueIps, uniquenessPct:uniquenessPct, crowdedPct:crowdedPct, avgScore:avgScore,
+    topLocations:topLocations, topRegions:topRegions,
+    score:Math.max(0,Math.min(100,score)), dominantType:dominantType
+  };
+}
+function buildProviderGroups(items){
+  var latencies=items.map(getLatencyFor).filter(function(ms){ return typeof ms==='number'&&isFinite(ms); });
+  var minMs=latencies.length?Math.min.apply(null,latencies):0;
+  var maxMs=latencies.length?Math.max.apply(null,latencies):5000;
+  var msRange=Math.max(1,maxMs-minMs);
+  var groupsMap={};
+  items.forEach(function(item){ var key=providerNameFor(item); if(!groupsMap[key]) groupsMap[key]=[]; groupsMap[key].push(item); });
+  return Object.keys(groupsMap).map(function(name){ return buildProviderSummary(name,groupsMap[name],minMs,msRange); }).sort(function(a,b){
+    if(b.score!==a.score) return b.score-a.score;
+    if(b.items.length!==a.items.length) return b.items.length-a.items.length;
+    return a.avgMs-b.avgMs;
+  });
+}
+function buildAllProviderSummary(items){
+  if(!items.length) return null;
+  var latencies=items.map(getLatencyFor).filter(function(ms){ return typeof ms==='number'&&isFinite(ms); });
+  var minMs=latencies.length?Math.min.apply(null,latencies):0;
+  var maxMs=latencies.length?Math.max.apply(null,latencies):5000;
+  return buildProviderSummary('All Providers',items,minMs,Math.max(1,maxMs-minMs));
+}
+function renderProviderTabs(containerId, groups, activeName, clickFn){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  if(!groups.length){ el.innerHTML=''; return; }
+  var allCount=groups.reduce(function(sum,g){ return sum+g.items.length; },0);
+  var tabs=['<button type="button" class="provider-pill'+(activeName==='all'?' active':'')+'" onclick="'+clickFn+'(decodeURIComponent(\'all\'))">'
+    +'<div class="provider-pill-top"><span class="provider-pill-name">ALL PROVIDERS</span><span class="provider-pill-score">'+Math.max.apply(null,groups.map(function(group){ return group.score; }))+'</span></div>'
+    +'<div class="provider-pill-meta"><span>'+allCount.toLocaleString()+' proxies</span><span>'+groups.length+' ISPs</span></div></button>'];
+  tabs=tabs.concat(groups.map(function(group){
+    return '<button type="button" class="provider-pill'+(activeName===group.name?' active':'')+'" onclick="'+clickFn+'(decodeURIComponent(\''+encodeURIComponent(group.name)+'\'))">'
+      +'<div class="provider-pill-top"><span class="provider-pill-name" title="'+esc(group.name)+'">'+esc(group.name)+'</span><span class="provider-pill-score">'+group.score+'</span></div>'
+      +'<div class="provider-pill-meta"><span>'+group.items.length.toLocaleString()+' proxies</span><span>'+group.avgMs+'ms avg</span><span>'+group.uniquenessPct+'% unique</span></div></button>';
+  }));
+  el.innerHTML=tabs.join('');
+}
+function renderProviderSummary(containerId, summary){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  if(!summary||!summary.items.length){ el.innerHTML=''; return; }
+  var reasons=[
+    'Consistency '+summary.consistencyPct+'%',
+    'Average speed '+summary.avgMs+'ms',
+    'Fastest '+(summary.minLatency!=null?summary.minLatency+'ms':'n/a'),
+    'Unique IPs '+summary.uniquenessPct+'%',
+    'Residential share '+summary.residentialPct+'%',
+    'Datacenter risk '+summary.datacenterPct+'%'
+  ];
+  el.innerHTML='<div class="provider-summary-grid">'
+    +'<div><div class="provider-title">'+esc(summary.name)+'</div><div class="provider-sub">'+summary.items.length.toLocaleString()+' proxies · '+summary.uniqueIps.toLocaleString()+' unique IPs · dominant '+ipTypeLabel(summary.dominantType)+' · '+(summary.topRegions.join(', ')||'Unknown region')+'</div><div class="provider-insights">'+reasons.map(function(reason){ return '<span class="provider-reason">'+esc(reason)+'</span>'; }).join('')+'</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v" style="color:var(--accent)">'+summary.score+'</div><div class="provider-metric-l">Provider Score</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.avgMs+'ms</div><div class="provider-metric-l">Average Speed</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+(summary.minLatency!=null?summary.minLatency+'ms':'—')+'</div><div class="provider-metric-l">Fastest Seen</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.consistencyPct+'%</div><div class="provider-metric-l">Consistency</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.residentialPct+'%</div><div class="provider-metric-l">Residential Share</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.uniquenessPct+'%</div><div class="provider-metric-l">IP Uniqueness</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+(summary.topLocations[0]?esc(summary.topLocations[0]):'—')+'</div><div class="provider-metric-l">Top Location</div></div>'
+    +'</div>';
+}
+function scrollProviderTabs(id, direction){
+  var el=document.getElementById(id);
+  if(!el) return;
+  el.scrollBy({ left: direction * Math.max(220, Math.round(el.clientWidth*0.65)), behavior: 'smooth' });
+}
+function groupByResidentialRange(items){
+  var ranges={};
+  items.forEach(function(item){
+    if(item.ip_type!=='residential' || !item.egress_ip) return;
+    var parts=String(item.egress_ip).split('.');
+    if(parts.length!==4) return;
+    var key=parts.slice(0,3).join('.')+'.0/24';
+    if(!ranges[key]) ranges[key]={ key:key, count:0, totalMs:0, uniqueIps:{} };
+    ranges[key].count++;
+    ranges[key].totalMs += getLatencyFor(item)||0;
+    ranges[key].uniqueIps[item.egress_ip]=1;
+  });
+  return Object.values(ranges).map(function(range){
+    return {
+      key: range.key,
+      count: range.count,
+      avgMs: Math.round(range.totalMs/Math.max(range.count,1)),
+      uniqueIps: Object.keys(range.uniqueIps).length
+    };
+  }).sort(function(a,b){ return b.count-a.count || a.avgMs-b.avgMs; });
+}
+function renderSubnetHeatmap(containerId, items){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  var ranges=groupByResidentialRange(items).slice(0,24);
+  if(!ranges.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  var maxCount=Math.max.apply(null,ranges.map(function(r){ return r.count; }));
+  el.innerHTML='<div class="heatmap-title">Residential Range Distribution</div><div class="heatmap-grid">'
+    +ranges.map(function(range){
+      var intensity=Math.max(10,Math.round((range.count/Math.max(maxCount,1))*100));
+      return '<div class="heatmap-cell">'
+        +'<div class="heatmap-range">'+range.key+'</div>'
+        +'<div class="heatmap-meta"><span>'+range.count+' proxies</span><span>'+range.uniqueIps+' IPs</span></div>'
+        +'<div class="heatmap-meta"><span>'+range.avgMs+'ms avg</span></div>'
+        +'<div class="heatmap-bar"><div class="heatmap-bar-fill" style="width:'+intensity+'%"></div></div>'
+        +'</div>';
+    }).join('')
+    +'</div>';
+}
+function renderProviderSummary(containerId, summary){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  if(!summary||!summary.items.length){ el.innerHTML=''; return; }
+  var reasons=[
+    'Consistency '+summary.consistencyPct+'%',
+    'Average speed '+summary.avgMs+'ms',
+    'Fastest '+(summary.minLatency!=null?summary.minLatency+'ms':'n/a'),
+    'Unique IPs '+summary.uniquenessPct+'%',
+    'Residential share '+summary.residentialPct+'%',
+    'Datacenter risk '+summary.datacenterPct+'%'
+  ];
+  el.innerHTML='<div class="provider-summary-grid">'
+    +'<div class="provider-summary-head"><div><div class="provider-title">'+esc(summary.name)+'</div><div class="provider-sub">'+summary.items.length.toLocaleString()+' proxies &middot; '+summary.uniqueIps.toLocaleString()+' unique IPs &middot; dominant '+ipTypeLabel(summary.dominantType)+' &middot; '+(summary.topRegions.join(', ')||'Unknown region')+'</div></div><div class="provider-summary-notes"><span class="provider-reason">'+esc(summary.topLocations[0]||'Unknown location')+'</span><span class="provider-reason">Datacenter risk '+summary.datacenterPct+'%</span></div></div>'
+    +'<div class="provider-metrics-row">'
+    +'<div class="provider-metric"><div class="provider-metric-v" style="color:var(--accent)">'+summary.score+'</div><div class="provider-metric-l">Provider Score</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.avgMs+'ms</div><div class="provider-metric-l">Average Speed</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+(summary.minLatency!=null?summary.minLatency+'ms':'&mdash;')+'</div><div class="provider-metric-l">Fastest Seen</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.consistencyPct+'%</div><div class="provider-metric-l">Consistency</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.residentialPct+'%</div><div class="provider-metric-l">Residential Share</div></div>'
+    +'<div class="provider-metric"><div class="provider-metric-v">'+summary.uniquenessPct+'%</div><div class="provider-metric-l">IP Uniqueness</div></div>'
+    +'</div>'
+    +'<details class="provider-details"><summary>More analysis</summary><div class="provider-insights">'+reasons.map(function(reason){ return '<span class="provider-reason">'+esc(reason)+'</span>'; }).join('')+'</div></details>'
+    +'</div>';
+}
+function renderSubnetHeatmap(containerId, items){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  var ranges=groupByResidentialRange(items).slice(0,24);
+  if(!ranges.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  var maxCount=Math.max.apply(null,ranges.map(function(r){ return r.count; }));
+  el.innerHTML='<details class="heatmap-panel"><summary>Residential Range Distribution &middot; '+ranges.length+' subnet groups</summary><div class="heatmap-inner"><div class="heatmap-grid">'
+    +ranges.map(function(range){
+      var intensity=Math.max(10,Math.round((range.count/Math.max(maxCount,1))*100));
+      return '<div class="heatmap-cell">'
+        +'<div class="heatmap-range">'+range.key+'</div>'
+        +'<div class="heatmap-meta"><span>'+range.count+' proxies</span><span>'+range.uniqueIps+' IPs</span></div>'
+        +'<div class="heatmap-meta"><span>'+range.avgMs+'ms avg</span></div>'
+        +'<div class="heatmap-bar"><div class="heatmap-bar-fill" style="width:'+intensity+'%"></div></div>'
+        +'</div>';
+    }).join('')
+    +'</div></div></details>';
+}
+function sortBestItems(items){
+  return items.slice().sort(function(a,b){
+    var bCons=getConsistencyFor(b), aCons=getConsistencyFor(a);
+    if(bCons!==aCons) return bCons-aCons;
+    var bType=getTypeWeight(b), aType=getTypeWeight(a);
+    if(bType!==aType) return bType-aType;
+    return (getLatencyFor(a)||999999)-(getLatencyFor(b)||999999);
+  });
+}
+function getSessionFilteredItems(){
+  var runCount=_lastRunCount>0?_lastRunCount:1;
+  var minP=parseInt((document.getElementById('minPasses')||{}).value||runCount)||runCount;
+  return _sessAnalyzed.filter(function(a){
+    if(a.pass_count<minP) return false;
+    // ALL mode: exclude mobile, datacenter, private, and flagged (use filter buttons to view them)
+    if(_sessTypeFilter==='all') return a.ip_type!=='datacenter'&&a.ip_type!=='mobile'&&a.ip_type!=='private'&&a.ip_type!=='flagged_proxy';
+    if(_sessTypeFilter==='datacenter') return a.ip_type==='datacenter'||a.ip_type==='flagged_proxy';
+    return a.ip_type===_sessTypeFilter;
+  });
+}
+function getActiveSessionItems(){
+  var filtered=getSessionFilteredItems();
+  if(_sessionProviderFilter==='all') return filtered;
+  return filtered.filter(function(item){ return providerNameFor(item)===_sessionProviderFilter; });
+}
+function setSessionProvider(name){ _sessionProviderFilter=name; renderSessResults(); }
+function setJobProvider(name){ _jobProviderFilter=name; renderJobResults(); }
+function renderSessResults(){
+  var filtered=getSessionFilteredItems();
+  var groups=buildProviderGroups(filtered);
+  if(_sessionProviderFilter!=='all'&&!groups.some(function(group){ return group.name===_sessionProviderFilter; })) _sessionProviderFilter='all';
+  var activeItems=getActiveSessionItems();
+  var activeSummary=_sessionProviderFilter==='all' ? buildAllProviderSummary(filtered) : (groups.find(function(group){ return group.name===_sessionProviderFilter; })||null);
+  document.getElementById('sessResCount').textContent=filtered.length.toLocaleString()+' proxies · '+uniqueIpCount(filtered).toLocaleString()+' unique IPs';
+  document.getElementById('sessExportLbl').textContent=Math.min(activeItems.length,1000)+' ready from '+(_sessionProviderFilter==='all'?'all providers':_sessionProviderFilter);
+  renderProviderTabs('sessProviderTabs',groups,_sessionProviderFilter,'setSessionProvider');
+  renderProviderSummary('sessProviderSummary',activeSummary);
+  renderSubnetHeatmap('sessSubnetHeatmap',activeItems);
+  renderIPGroups('sessBody','sessEmpty',groupByEgressIP(sortBestItems(activeItems).slice(0,500)),true);
+}
+
+async function deleteSession(){
+  if(!activeSessionId||!confirm('Delete this session?'))return;
+  await fetch(API+'/api/sessions/'+activeSessionId,{method:'DELETE'});
+  activeSessionId=null; _lastRunCount=-1; _sessAnalyzed=[]; _sessionAnalytics=null; _sessionProviderFilter='all';
+  document.getElementById('sessDetail').style.display='none';
+  doRefresh();
+}
+async function copySession(){
+  var btn=document.getElementById('sessCopyBtn');
+  var list=sortBestItems(getActiveSessionItems()).filter(function(item){ return item.ip_type!=='datacenter'&&item.ip_type!=='private'; }).slice(0,1000).map(proxyLineForItem).join('\n');
+  try{
+    var n=list?list.split('\n').filter(function(line){ return line.trim(); }).length:0;
+    await navigator.clipboard.writeText(list);
+    btn.textContent='✓ COPIED '+n+'!'; btn.style.color='var(--accent)';
+    setTimeout(function(){btn.textContent='⎘ COPY TOP 1000';btn.style.color='';},2500);
+  }catch(e){ downloadTextFile('proxy-session-top-1000.txt',list); }
+}
+function exportSession(){
+  var provider=_sessionProviderFilter==='all'?'all-providers':_sessionProviderFilter.replace(/[^\w.-]+/g,'_').slice(0,60);
+  var list=sortBestItems(getActiveSessionItems()).filter(function(item){ return item.ip_type!=='datacenter'&&item.ip_type!=='private'; }).slice(0,1000).map(proxyLineForItem).join('\n');
+  downloadTextFile('proxy-export-'+provider+'.txt',list);
+}
+function downloadSessionDebug(){ if(activeSessionId) window.open(API+'/api/sessions/'+activeSessionId+'/debug-prompt','_blank'); }
+function renderJobResults(){
+  // Exclude mobile and datacenter from job results display (use provider strip to see all ISPs)
+  var displayAll=_jobResults.filter(function(item){ return item.ip_type!=='datacenter'&&item.ip_type!=='mobile'&&item.ip_type!=='private'&&item.ip_type!=='flagged_proxy'; });
+  var groups=buildProviderGroups(displayAll);
+  if(_jobProviderFilter!=='all'&&!groups.some(function(group){ return group.name===_jobProviderFilter; })) _jobProviderFilter='all';
+  var activeItems=_jobProviderFilter==='all' ? displayAll : displayAll.filter(function(item){ return providerNameFor(item)===_jobProviderFilter; });
+  var activeSummary=_jobProviderFilter==='all' ? buildAllProviderSummary(activeItems) : (groups.find(function(group){ return group.name===_jobProviderFilter; })||null);
+  var excluded=_jobResults.length-displayAll.length;
+  document.getElementById('resExportLbl').textContent=Math.min(activeItems.length,1000)+' ready'+(excluded?' · '+excluded+' mobile/DC excluded':'');
+  renderProviderTabs('jobProviderTabs',groups,_jobProviderFilter,'setJobProvider');
+  renderProviderSummary('jobProviderSummary',activeSummary);
+  renderSubnetHeatmap('jobSubnetHeatmap',activeItems);
+  renderIPGroups('resBody','resEmpty',groupByEgressIP(sortBestItems(activeItems).slice(0,500)),false);
+}
+
+function renderJobs(list){
+  document.getElementById('jobCount').textContent=list.length+' job'+(list.length!==1?'s':'');
+  var el=document.getElementById('jobsList');
+  if(!list.length){el.innerHTML='<div class="empty">No single-run jobs.</div>';return;}
+  el.innerHTML=list.map(function(j){
+    var pct=j.progress_pct||0;
+    var badge=j.status==='running'?'<span class="badge b-run">RUNNING</span>'
+      :j.status==='done'?'<span class="badge b-done">DONE</span>'
+      :'<span class="badge b-q">QUEUED</span>';
+    var eta=j.eta_sec&&j.status==='running'?' · ETA '+j.eta_sec+'s':'';
+    return '<div class="job-card" style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center">'
+      +'<div><div class="job-top"><div class="job-name">'+esc(j.list_name||j.job_id)+'</div></div>'
+      +'<div class="job-meta"><span class="g">'+j.passed.toLocaleString()+' passed</span>'
+      +'<span class="r">'+j.failed.toLocaleString()+' failed</span>'
+      +'<span>'+(j.tested||0).toLocaleString()+'/'+j.total.toLocaleString()+'</span>'
+      +'<span>'+Math.round(pct)+'%'+eta+'</span></div>'
+      +'<div class="prog-wrap"><div class="prog-bar" style="width:'+pct+'%"></div></div></div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'+badge
+      +(j.status==='done'?'<button class="btn btn-out btn-sm" onclick="openJob(\''+j.job_id+'\')">VIEW</button>':'')
+      +'<button class="btn btn-red btn-sm" onclick="deleteJob(\''+j.job_id+'\')">✕</button>'
+      +'</div></div>';
+  }).join('');
+}
+
+async function openJob(jobId){ activeJobId=jobId; await loadJobResults(jobId); }
+
+async function loadJobResults(jobId){
+  var [sr,rr]=await Promise.all([fetch(API+'/api/jobs/'+jobId),fetch(API+'/api/jobs/'+jobId+'/results?limit=1000')]);
+  if(!sr.ok||!rr.ok)return;
+  var s=await sr.json(), r=await rr.json();
+  _jobResults=r.proxies||[];
+  _jobProviderFilter='all';
+  document.getElementById('resPanel').style.display='block';
+  document.getElementById('resName').textContent=s.list_name||jobId;
+  document.getElementById('resMeta').textContent=s.config.test_url;
+  document.getElementById('rTotal').textContent=s.total.toLocaleString();
+  document.getElementById('rPassed').textContent=s.passed.toLocaleString();
+  document.getElementById('rFailed').textContent=s.failed.toLocaleString();
+  document.getElementById('rRate').textContent=s.total>0?((s.passed/s.total)*100).toFixed(1)+'%':'—';
+  if(r.ip_analysis) renderAnalysis(r.ip_analysis,'jobAnalysisPanel');
+  renderJobResults();
+  document.getElementById('resPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function copyJob(){
+  var btn=document.getElementById('resCopyBtn');
+  var list=sortBestItems(_jobProviderFilter==='all'?_jobResults:_jobResults.filter(function(item){ return providerNameFor(item)===_jobProviderFilter; }))
+    .filter(function(item){ return item.ip_type!=='datacenter'&&item.ip_type!=='private'; })
+    .slice(0,1000)
+    .map(proxyLineForItem)
+    .join('\n');
+  try{
+    var n=list?list.split('\n').filter(function(line){ return line.trim(); }).length:0;
+    await navigator.clipboard.writeText(list);
+    btn.textContent='✓ COPIED '+n+'!'; btn.style.color='var(--accent)';
+    setTimeout(function(){btn.textContent='⎘ COPY TOP 1000';btn.style.color='';},2000);
+  }catch(e){ downloadTextFile('proxy-job-top-1000.txt',list); }
+}
+function exportJob(){
+  var provider=_jobProviderFilter==='all'?'all-providers':_jobProviderFilter.replace(/[^\w.-]+/g,'_').slice(0,60);
+  var list=sortBestItems(_jobProviderFilter==='all'?_jobResults:_jobResults.filter(function(item){ return providerNameFor(item)===_jobProviderFilter; }))
+    .filter(function(item){ return item.ip_type!=='datacenter'&&item.ip_type!=='private'; })
+    .slice(0,1000)
+    .map(proxyLineForItem)
+    .join('\n');
+  downloadTextFile('proxy-job-export-'+provider+'.txt',list);
+}
+function downloadJobDebug(){ if(activeJobId) window.open(API+'/api/jobs/'+activeJobId+'/debug-prompt','_blank'); }
+async function deleteJob(jobId){
+  await fetch(API+'/api/jobs/'+jobId,{method:'DELETE'});
+  if(activeJobId===jobId){activeJobId=null;document.getElementById('resPanel').style.display='none';}
+  doRefresh();
+}
+
+// ── Session Analytics ──────────────────────────────────────────────────────
+function renderSessionAnalytics(a){
+  if(!a||!a.composite_ranked) return;
+  var panel=document.getElementById('sessAnalyticsPanel');
+  panel.style.display='block';
+
+  // ISP Speed Profile (server field: isp_speeds, consistency_pct)
+  var ispRows=(a.isp_speeds||[]).map(function(isp){
+    var latCls=isp.avg_ms<300?'lat-g':isp.avg_ms<700?'lat-o':'lat-s';
+    var cons=isp.consistency_pct||0;
+    var consCls=cons>70?'g':cons>40?'':'r';
+    return '<tr>'
+      +'<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(isp.isp)+'</td>'
+      +'<td>'+isp.count+'</td>'
+      +'<td style="color:var(--muted)">'+isp.pool_pct+'%</td>'
+      +'<td class="'+latCls+'">'+isp.avg_ms+'ms</td>'
+      +'<td class="'+consCls+'">'+cons+'%</td>'
+      +'<td>'+ipTypeDot(isp.dominant_type)+'<span style="font-size:10px;color:'+ipTypeColor(isp.dominant_type)+'">'+ipTypeLabel(isp.dominant_type)+'</span></td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('ispProfileBody').innerHTML=ispRows||'<tr><td colspan="6" style="color:var(--muted);padding:12px">No data yet.</td></tr>';
+
+  // Crowding Analysis
+  var crowdEl=document.getElementById('crowdingContent');
+  var crowded=a.crowded_ips||[];
+  if(!crowded.length){
+    crowdEl.innerHTML='<div class="alert-box alert-good" style="margin:8px 0">✓ No crowded IPs — all egress IPs are unique to their proxy credentials</div>';
+  } else {
+    var crowdHtml=crowded.slice(0,15).map(function(c){
+      var n=c.shared_by||2;
+      var chip=n>=5?'<span class="crowd-chip crowd-hi">×'+n+' creds</span>'
+        :n>=3?'<span class="crowd-chip crowd-md">×'+n+' creds</span>'
+        :'<span class="crowd-chip crowd-lo">×'+n+' creds</span>';
+      var ispStr=c.isp?'<span style="color:var(--muted);font-size:10px">'+esc(c.isp.slice(0,24))+'</span>':'';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(42,42,56,.4);font-size:11px">'
+        +'<span style="color:var(--muted);min-width:120px;font-family:var(--mono)">'+c.ip+'</span>'
+        +chip+ispStr
+        +'</div>';
+    }).join('');
+    var totalCrowded=crowded.length;
+    crowdEl.innerHTML='<div class="alert-box alert-warn" style="margin:8px 0">⚡ '+totalCrowded+' egress IP'+(totalCrowded!==1?'s are':'is')+' shared by 2+ proxy credentials — pool is smaller than it appears</div>'
+      +'<div style="max-height:150px;overflow-y:auto">'+crowdHtml+'</div>';
+  }
+
+  // Composite Ranking
+  var ranked=a.composite_ranked||[];
+  var compRows=ranked.slice(0,200).map(function(p,i){
+    var score=p.composite_score||0;
+    var scoreColor=score>=70?'var(--accent)':score>=40?'#ffcc00':'var(--fail)';
+    var bar='<span class="score-bar-track"><span class="score-bar-fill" style="width:'+score+'%;background:'+scoreColor+'"></span></span>';
+    var isp=p.isp?esc(p.isp.slice(0,18)):'—';
+    var egressIp=p.egress_ip||'—';
+    var ms=p.mean_lat!=null?p.mean_lat:null;
+    var avgMs=ms!=null?ms+'ms':'—';
+    var latCls=ms!=null?(ms<300?'lat-g':ms<700?'lat-o':'lat-s'):'';
+    var passes=p.pass_count+'/'+(p.run_count||'?');
+    var crowdCount=p.shared_by||1;
+    var crowdEl2=crowdCount>=5?'<span class="crowd-chip crowd-hi">×'+crowdCount+'</span>'
+      :crowdCount>=3?'<span class="crowd-chip crowd-md">×'+crowdCount+'</span>'
+      :crowdCount>=2?'<span class="crowd-chip crowd-lo">×'+crowdCount+'</span>'
+      :'<span style="color:var(--accent);font-size:10px">unique</span>';
+    var px=p.proxy||p;
+    var proxyStr=px.host+':'+px.port;
+    return '<tr>'
+      +'<td style="color:var(--muted)">'+(i+1)+'</td>'
+      +'<td>'+bar+'<span style="color:'+scoreColor+';font-weight:700">'+score+'</span></td>'
+      +'<td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(proxyStr)+'</td>'
+      +'<td style="color:var(--muted)">'+isp+'</td>'
+      +'<td style="color:var(--muted);font-size:10px">'+egressIp+'</td>'
+      +'<td class="'+latCls+'">'+avgMs+'</td>'
+      +'<td style="color:var(--accent)">'+passes+'</td>'
+      +'<td>'+crowdEl2+'</td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('compositeBody').innerHTML=compRows||'<tr><td colspan="8" style="color:var(--muted);padding:12px">No data yet.</td></tr>';
+}
+
+async function copyComposite(){
+  var btn=document.getElementById('compositeCopyBtn');
+  if(!activeSessionId) return;
+  var topN=parseInt((document.getElementById('compositeCopyN')||{}).value||'1000')||1000;
+  try{
+    var r=await fetch(API+'/api/sessions/'+activeSessionId+'/copy-composite?top_n='+topN);
+    var text=await r.text();
+    var n=text.trim().split('\n').filter(function(l){return l.trim();}).length;
+    await navigator.clipboard.writeText(text);
+    btn.textContent='✓ '+n+' COPIED!'; btn.style.color='var(--accent)';
+    setTimeout(function(){btn.textContent='⎘ COPY BEST';btn.style.color='';},2500);
+  }catch(e){window.open(API+'/api/sessions/'+activeSessionId+'/copy-composite?top_n='+topN,'_blank');}
+}
+
+function renderCompare(sessions){
+  var panel=document.getElementById('comparePanel');
+  if(!sessions||sessions.length<2){panel.style.display='none';return;}
+  panel.style.display='block';
+  document.getElementById('compareSubtitle').textContent=sessions.length+' sessions';
+  var grid=document.getElementById('compareGrid');
+  // Find best values for highlighting
+  var bestRes=Math.max.apply(null,sessions.map(function(s){return s.residential_pct||0;}));
+  var bestSpd=Math.min.apply(null,sessions.map(function(s){return s.avg_ms||9999;}));
+  var bestScore=Math.max.apply(null,sessions.map(function(s){return s.quality_score||0;}));
+  grid.innerHTML=sessions.map(function(s){
+    var resPct=s.residential_pct!=null?s.residential_pct+'%':'—';
+    var avgSpd=s.avg_ms!=null?s.avg_ms+'ms':'—';
+    var qScore=s.quality_score!=null?s.quality_score:'—';
+    var scoreColor=typeof s.quality_score==='number'?(s.quality_score>=70?'var(--accent)':s.quality_score>=40?'#ffcc00':'var(--fail)'):'var(--muted)';
+    var resWin=s.residential_pct===bestRes&&bestRes>0?' win':'';
+    var spdWin=s.avg_ms===bestSpd&&bestSpd<9999?' win':'';
+    var scoreWin=s.quality_score===bestScore&&bestScore>0?' win':'';
+    return '<div class="compare-cell">'
+      +'<div class="compare-name" title="'+esc(s.name)+'">'+esc(s.name)+'</div>'
+      +'<div class="compare-row"><span class="compare-key">RUNS</span><span class="compare-val">'+s.run_count+'</span></div>'
+      +'<div class="compare-row"><span class="compare-key">PROXIES</span><span class="compare-val">'+s.proxy_count.toLocaleString()+'</span></div>'
+      +'<div class="compare-row"><span class="compare-key">RESIDENTIAL</span><span class="compare-val'+resWin+'">'+resPct+'</span></div>'
+      +'<div class="compare-row"><span class="compare-key">AVG SPEED</span><span class="compare-val'+spdWin+'">'+avgSpd+'</span></div>'
+      +'<div class="compare-row"><span class="compare-key">UNIQUE IPs</span><span class="compare-val">'+s.unique_ips+'</span></div>'
+      +'<div class="compare-row"><span class="compare-key">ISP DIVERSITY</span><span class="compare-val">'+s.isp_count+' ISPs</span></div>'
+      +'<div class="compare-row"><span class="compare-key">POOL SCORE</span><span class="compare-val'+scoreWin+'" style="color:'+scoreColor+'">'+qScore+'</span></div>'
+      +'</div>';
+  }).join('');
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function toast(msg,err){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.style.borderColor=err?'var(--fail)':'var(--accent)'; t.style.color=err?'var(--fail)':'var(--accent)';
+  t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},3500);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── Page navigation ────────────────────────────────────────────────────────
+function setPage(page){
+  ['tester','providers','settings','integrations'].forEach(function(p){
+    var btn=document.getElementById('nav'+p.charAt(0).toUpperCase()+p.slice(1));
+    if(btn) btn.classList.toggle('active', p===page);
+  });
+  document.getElementById('appPage').style.display          = page==='tester'       ? '' : 'none';
+  document.getElementById('providersPage').style.display    = page==='providers'    ? '' : 'none';
+  document.getElementById('settingsPage').style.display     = page==='settings'     ? '' : 'none';
+  document.getElementById('integrationsPage').style.display = page==='integrations' ? '' : 'none';
+  if(page==='providers')    { refreshProviders(); loadSessionGroups(); }
+  if(page==='settings')     { renderDbgLog(); }
+  if(page==='integrations') { renderIntegrationList(); refreshApiTab(); }
+}
+
+// ── Providers page ─────────────────────────────────────────────────────────
+var _pvData=[], _activePvId=null, _pvDetailData=null, _pvdRanked=[];
+
+var _pvTextDebounce=null;
+function pvTextChanged(){
+  clearTimeout(_pvTextDebounce);
+  _pvTextDebounce=setTimeout(function(){
+    var n=countLines(document.getElementById('pvText').value);
+    var el=document.getElementById('pvCounter');
+    el.textContent=n.toLocaleString()+' proxies'; el.className='pcnt'+(n?' has':'');
+  },200);
+}
+
+function setPvMode(mode){
+  var isPaste=mode==='paste';
+  document.getElementById('pvModePaste').classList.toggle('active',isPaste);
+  document.getElementById('pvModeSession').classList.toggle('active',!isPaste);
+  document.getElementById('pvPasteWrap').style.display=isPaste?'':'none';
+  document.getElementById('pvSessionWrap').style.display=isPaste?'none':'';
+  if(!isPaste) loadPvSessionDropdown();
+}
+
+async function loadPvSessionDropdown(){
+  var sel=document.getElementById('pvSessionSelect');
+  try{
+    var r=await fetch(API+'/api/sessions');
+    var list=await r.json();
+    sel.innerHTML='<option value="">— Select a saved session —</option>'
+      +list.map(function(s){
+        return '<option value="'+s.session_id+'">'+esc(s.name)+' ('+s.proxy_count.toLocaleString()+' proxies, '+s.run_count+' run'+(s.run_count!==1?'s':'')+')</option>';
+      }).join('');
+  }catch(e){ sel.innerHTML='<option value="">Error loading sessions</option>'; }
+}
+
+async function pvSessionSelected(){
+  var sid=document.getElementById('pvSessionSelect').value;
+  var preview=document.getElementById('pvSessionPreview');
+  var counter=document.getElementById('pvCounter');
+  if(!sid){
+    preview.style.display='none';
+    counter.textContent='0 proxies'; counter.className='pcnt';
+    return;
+  }
+  preview.style.display='';
+  preview.style.color='var(--muted)';
+  preview.textContent='Loading proxy list…';
+  try{
+    var r=await fetch(API+'/api/sessions/'+sid+'/list');
+    if(!r.ok) throw new Error('Failed');
+    var text=await r.text();
+    var lines=text.split('\n').filter(function(l){return l.trim();});
+    // Fill the hidden textarea so createProvider() works unchanged
+    document.getElementById('pvText').value=text;
+    pvTextChanged();
+    // Auto-fill provider name if blank
+    var selEl=document.getElementById('pvSessionSelect');
+    var sessLabel=selEl.options[selEl.selectedIndex].text.split(' (')[0];
+    var nameEl=document.getElementById('pvName');
+    if(!nameEl.value.trim()) nameEl.value=sessLabel;
+    preview.style.color='var(--accent)';
+    preview.textContent='✓ '+lines.length.toLocaleString()+' proxies imported — ready to add provider';
+    // store session id so we can auto-link after creation
+    document.getElementById('pvSessionSelect').dataset.imported=sid;
+  }catch(e){
+    preview.style.color='var(--fail)';
+    preview.textContent='✗ Could not load proxy list from that session';
+    document.getElementById('pvSessionSelect').dataset.imported='';
+  }
+}
+
+async function refreshProviders(){
+  try{
+    var r=await fetch(API+'/api/providers');
+    if(r.ok){ _pvData=await r.json(); renderProviderList(); loadSessionGroups(); }
+  }catch(e){}
+}
+
+function renderProviderList(){
+  document.getElementById('pvCount').textContent=_pvData.length+' provider'+(_pvData.length!==1?'s':'');
+  var el=document.getElementById('pvList');
+  if(!_pvData.length){ el.innerHTML='<div class="empty">No providers yet. Add one above.</div>'; return; }
+  el.innerHTML=_pvData.map(function(p){
+    var sel=_activePvId===p.id?' sel':'';
+    var scoreColor=p.last_quality_score!=null
+      ?(p.last_quality_score>=70?'var(--accent)':p.last_quality_score>=40?'var(--gold)':'var(--fail)'):'var(--muted)';
+    return '<div class="pv-card'+sel+'" onclick="selectProvider(\''+p.id+'\')" oncontextmenu="pvCtxMenu(event,\''+p.id+'\')">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">'
+      +'<div class="pv-name">'+esc(p.name)+'</div>'
+      +(p.last_quality_score!=null?'<span class="badge b-done" style="border-color:'+scoreColor+';color:'+scoreColor+'">'+p.last_quality_score+'</span>':'')
+      +'</div>'
+      +'<div class="pv-meta">'
+      +'<span class="g">'+p.proxy_count.toLocaleString()+' proxies</span>'
+      +'<span>'+p.session_count+' test'+(p.session_count!==1?'s':'')+'</span>'
+      +(p.last_residential_pct!=null?'<span>'+p.last_residential_pct+'% resi</span>':'')
+      +(p.last_avg_ms!=null?'<span>'+p.last_avg_ms+'ms avg</span>':'')
+      +'</div></div>';
+  }).join('');
+}
+
+async function selectProvider(id){
+  _activePvId=id;
+  renderProviderList();
+  document.getElementById('pvDetail').style.display='block';
+  await loadProviderDetail(id);
+}
+
+async function loadProviderDetail(id){
+  try{
+    var r=await fetch(API+'/api/providers/'+id);
+    if(!r.ok) return;
+    _pvDetailData=await r.json();
+    renderProviderDetailHeader(_pvDetailData);
+    await populateLinkDropdown();
+    await loadProviderComposite(_pvDetailData);
+  }catch(e){}
+}
+
+function renderProviderDetailHeader(data){
+  document.getElementById('pvDetailName').textContent=data.name;
+  document.getElementById('pvdProxies').textContent=data.proxy_count.toLocaleString();
+  document.getElementById('pvdSessCount').textContent=data.sessions?data.sessions.length:0;
+  var last=data.sessions&&data.sessions[data.sessions.length-1];
+  document.getElementById('pvdResidential').textContent=last&&last.residential_pct!=null?last.residential_pct+'%':'—';
+  document.getElementById('pvdScore').textContent=last&&last.quality_score!=null?last.quality_score:'—';
+  var sessEl=document.getElementById('pvdSessionsList');
+  if(data.sessions&&data.sessions.length){
+    sessEl.innerHTML=data.sessions.map(function(s,i){
+      return '<div class="job-card"><div class="job-top">'
+        +'<div class="job-name">Test '+(i+1)+' — '+s.run_count+' run'+(s.run_count!==1?'s':'')+'</div>'
+        +'<span class="badge '+(s.status==='running'?'b-run':'b-done')+'">'+s.status.toUpperCase()+'</span>'
+        +'</div>'
+        +'<div class="job-meta">'
+        +(s.quality_score!=null?'<span class="g">Quality: '+s.quality_score+'</span>':'')
+        +(s.residential_pct!=null?'<span>'+s.residential_pct+'% resi</span>':'')
+        +'<span>'+s.analyzed_count.toLocaleString()+' analyzed</span>'
+        +'<span>'+new Date(s.updated_at).toLocaleString()+'</span>'
+        +'</div></div>';
+    }).join('');
+  } else {
+    sessEl.innerHTML='<div class="empty" style="padding:14px">No tests run yet. Click ▶ RUN TEST above.</div>';
+  }
+}
+
+async function loadProviderComposite(data){
+  if(!data||!data.sessions||!data.sessions.length) return;
+  var allRanked=[];
+  for(var i=0;i<data.sessions.length;i++){
+    try{
+      var ar=await fetch(API+'/api/sessions/'+data.sessions[i].session_id+'/analytics');
+      if(ar.ok){
+        var analytics=await ar.json();
+        if(analytics.composite_ranked) allRanked=allRanked.concat(analytics.composite_ranked);
+      }
+    }catch(e){}
+  }
+  // Dedup by egress IP, keep highest score
+  var byEgress={};
+  allRanked.forEach(function(p){
+    var key=p.egress_ip||('__'+(p.proxy?p.proxy.host+':'+p.proxy.port:'x'));
+    if(!byEgress[key]||byEgress[key].composite_score<p.composite_score) byEgress[key]=p;
+  });
+  _pvdRanked=Object.values(byEgress).sort(function(a,b){return b.composite_score-a.composite_score;});
+  var panel=document.getElementById('pvdAnalytics');
+  if(!_pvdRanked.length){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  document.getElementById('pvdCopyLbl').textContent=_pvdRanked.length.toLocaleString()+' unique proxies ranked';
+  var compRows=_pvdRanked.slice(0,300).map(function(p,i){
+    var score=p.composite_score||0;
+    var scoreColor=score>=70?'var(--accent)':score>=40?'#ffcc00':'var(--fail)';
+    var bar='<span class="score-bar-track"><span class="score-bar-fill" style="width:'+score+'%;background:'+scoreColor+'"></span></span>';
+    var isp=p.isp?esc(p.isp.slice(0,18)):'—';
+    var ms=p.mean_lat!=null?p.mean_lat+'ms':'—';
+    var latCls=p.mean_lat!=null?(p.mean_lat<300?'lat-g':p.mean_lat<700?'lat-o':'lat-s'):'';
+    var px=p.proxy||p;
+    return '<tr>'
+      +'<td style="color:var(--muted)">'+(i+1)+'</td>'
+      +'<td>'+bar+'<span style="color:'+scoreColor+';font-weight:700">'+score+'</span></td>'
+      +'<td style="font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis">'+esc(px.host+':'+px.port)+'</td>'
+      +'<td style="color:var(--muted)">'+isp+'</td>'
+      +'<td style="color:var(--muted);font-size:10px">'+(p.egress_ip||'—')+'</td>'
+      +'<td class="'+latCls+'">'+ms+'</td>'
+      +'<td style="color:var(--accent)">'+p.pass_count+'/'+p.run_count+'</td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('pvdCompositeBody').innerHTML=compRows||'<tr><td colspan="7" style="color:var(--muted);padding:12px">No data yet.</td></tr>';
+}
+
+async function populateLinkDropdown(){
+  // Fill the "Link Tester Session" dropdown with sessions not already linked
+  var sel=document.getElementById('pvdLinkSelect');
+  if(!sel) return;
+  var prov=_pvDetailData;
+  var linkedSet=new Set(prov?prov.session_ids||[]:[]);
+  try{
+    var r=await fetch(API+'/api/sessions');
+    if(!r.ok) return;
+    var allSess=await r.json();
+    var available=allSess.filter(function(s){ return !linkedSet.has(s.session_id); });
+    sel.innerHTML='<option value="">— Select a session to link —</option>'
+      +available.map(function(s){
+        return '<option value="'+s.session_id+'">'+esc(s.name)+' ('+s.run_count+' runs · '+s.proxy_count.toLocaleString()+' proxies)</option>';
+      }).join('');
+    document.getElementById('pvdLinkWrap').style.display=available.length?'':'none';
+  }catch(e){}
+}
+
+async function linkSessionToProvider(){
+  if(!_activePvId) return;
+  var sid=document.getElementById('pvdLinkSelect').value;
+  if(!sid){ toast('Select a session first.',true); return; }
+  try{
+    var r=await fetch(API+'/api/providers/'+_activePvId+'/link-session',{
+      method:'POST',body:JSON.stringify({session_id:sid}),
+      headers:{'Content-Type':'application/json'}
+    });
+    if(!r.ok){ var e=await r.json(); toast(e.error||'Error',true); return; }
+    toast('Session linked successfully!');
+    await loadProviderDetail(_activePvId);
+    await refreshProviders();
+  }catch(e){ toast(e.message,true); }
+}
+
+async function createProvider(){
+  var name=document.getElementById('pvName').value.trim();
+  var text=document.getElementById('pvText').value.trim();
+  if(!name){ toast('Enter a provider name.',true); return; }
+  if(!text){ toast('Paste or import a proxy list first.',true); return; }
+  // Check if we're in session-import mode so we can auto-link
+  var isSessionMode=document.getElementById('pvModeSession').classList.contains('active');
+  var importedSid=isSessionMode?(document.getElementById('pvSessionSelect').dataset.imported||''):'';
+  var fd=new FormData();
+  fd.append('provider_name',name);
+  fd.append('file',new Blob([text],{type:'text/plain'}),name+'.txt');
+  try{
+    var r=await fetch(API+'/api/providers',{method:'POST',body:fd});
+    if(!r.ok){ var e=await r.json(); toast(e.error||'Error',true); return; }
+    var d=await r.json();
+    // Auto-link the source session when created from "FROM SESSION" mode
+    if(importedSid){
+      await fetch(API+'/api/providers/'+d.id+'/link-session',{
+        method:'POST',body:JSON.stringify({session_id:importedSid}),
+        headers:{'Content-Type':'application/json'}
+      });
+    }
+    toast('Provider "'+d.name+'" added — '+d.proxy_count.toLocaleString()+' proxies'+(importedSid?' · session linked':''));
+    document.getElementById('pvName').value='';
+    document.getElementById('pvText').value='';
+    document.getElementById('pvCounter').textContent='0 proxies';
+    document.getElementById('pvSessionPreview').style.display='none';
+    document.getElementById('pvSessionSelect').value='';
+    document.getElementById('pvSessionSelect').dataset.imported='';
+    setPvMode('paste');
+    await refreshProviders();
+    selectProvider(d.id);
+  }catch(e){ toast(e.message,true); }
+}
+
+async function runProvider(){
+  if(!_activePvId) return;
+  var btn=document.getElementById('pvRunBtn');
+  btn.disabled=true; btn.textContent='STARTING...';
+  try{
+    var r=await fetch(API+'/api/providers/'+_activePvId+'/run',{method:'POST',body:'{}'});
+    if(!r.ok){ var e=await r.json(); toast(e.error||'Error',true); return; }
+    var d=await r.json();
+    toast('Test started — '+d.proxy_count.toLocaleString()+' proxies');
+    startPolling();
+    await loadProviderDetail(_activePvId);
+    await refreshProviders();
+  }catch(e){ toast(e.message,true); }
+  finally{ btn.disabled=false; btn.textContent='▶ RUN TEST'; }
+}
+
+async function deleteProvider(){
+  if(!_activePvId||!confirm('Delete this provider and all its test data?')) return;
+  await fetch(API+'/api/providers/'+_activePvId,{method:'DELETE'});
+  _activePvId=null; _pvDetailData=null; _pvdRanked=[];
+  document.getElementById('pvDetail').style.display='none';
+  refreshProviders();
+  toast('Provider deleted');
+}
+
+async function copyProviderBest(){
+  var btn=document.getElementById('pvdCopyBtn');
+  var n=parseInt(document.getElementById('pvdCopyN').value)||1000;
+  var ranked=_pvdRanked.slice(0,n);
+  if(!ranked.length){ toast('No proxies to copy.',true); return; }
+  var text=ranked.map(function(p){
+    var px=p.proxy||p;
+    return px.username?(px.host+':'+px.port+':'+px.username+':'+(px.password||'')):(px.host+':'+px.port);
+  }).join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    btn.textContent='✓ '+ranked.length+' COPIED!'; btn.style.color='var(--accent)';
+    setTimeout(function(){btn.textContent='⎘ COPY BEST';btn.style.color='';},2500);
+  }catch(e){ downloadTextFile('provider-best.txt',text); }
+}
+
+async function autopickProviders(){
+  var btn=document.getElementById('autopickBtn');
+  var n=parseInt(document.getElementById('autopickN').value)||1000;
+  var min=parseInt(document.getElementById('autopickMin').value)||0;
+  btn.disabled=true; btn.textContent='⟳ PICKING...';
+  try{
+    var r=await fetch(API+'/api/providers/autopick?top_n='+n+'&min_score='+min);
+    var text=await r.text();
+    var lines=text.trim().split('\n').filter(function(l){return l.trim();});
+    if(!lines.length){ toast('No qualifying proxies found across providers.',true); return; }
+    await navigator.clipboard.writeText(text.trim());
+    toast('✓ Copied '+lines.length+' best proxies from all providers!');
+  }catch(e){ toast(e.message||'Error',true); }
+  finally{ btn.disabled=false; btn.textContent='⎘ COPY BEST FROM ALL PROVIDERS'; }
+}
+
+// ── Context Menu ───────────────────────────────────────────────────────────
+// Use mousedown (not click) to dismiss so it doesn't fire during right-click show
+document.addEventListener('mousedown',function(e){
+  var m=document.getElementById('ctxMenu');
+  if(m&&m.style.display!=='none'&&!m.contains(e.target)) hideCtxMenu();
+});
+function showCtxMenu(e,items){
+  e.preventDefault(); e.stopPropagation();
+  var m=document.getElementById('ctxMenu');
+  m.innerHTML=items.map(function(item){
+    return '<div class="ctx-item'+(item.danger?' ctx-danger':'')+'"'
+      +' onmousedown="event.stopPropagation()"'
+      +' onclick="hideCtxMenu();'+item.action+'">'+esc(item.label)+'</div>';
+  }).join('');
+  m.style.display='block';
+  // Position — keep inside viewport
+  var x=e.clientX, y=e.clientY;
+  setTimeout(function(){
+    var w=m.offsetWidth||180, h=m.offsetHeight||items.length*38;
+    if(x+w>window.innerWidth)  x=window.innerWidth-w-4;
+    if(y+h>window.innerHeight) y=window.innerHeight-h-4;
+    m.style.left=x+'px'; m.style.top=y+'px';
+  },0);
+  m.style.left=x+'px'; m.style.top=y+'px';
+}
+function hideCtxMenu(){var m=document.getElementById('ctxMenu');if(m)m.style.display='none';}
+
+function sessCtxMenu(e,sid){
+  showCtxMenu(e,[
+    {label:'Rename',action:'renameSess(\''+sid+'\')'},
+    {label:'Run Again',action:'rerunSess(\''+sid+'\')'},
+    {label:'Delete',action:'confirmDeleteSess(\''+sid+'\')',danger:true}
+  ]);
+}
+async function renameSess(sid){
+  var name=await appPrompt('New session name:');
+  if(!name||!name.trim()) return;
+  try{
+    var r=await fetch(API+'/api/sessions/'+sid,{method:'PUT',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+    if(r.ok){toast('Session renamed');doRefresh();}
+    else toast('Rename failed',true);
+  }catch(e){toast(e.message,true);}
+}
+async function rerunSess(sid){
+  if(activeSessionId!==sid){activeSessionId=sid;document.getElementById('sessDetail').style.display='block';}
+  await addRunToSession();
+}
+async function confirmDeleteSess(sid){
+  if(!confirm('Delete this session?')) return;
+  activeSessionId=sid;
+  await deleteSession();
+}
+
+function pvCtxMenu(e,pid){
+  showCtxMenu(e,[
+    {label:'Rename',action:'renamePv(\''+pid+'\')'},
+    {label:'Run Test',action:'selectProvider(\''+pid+'\');runProvider()'},
+    {label:'Delete',action:'confirmDeletePv(\''+pid+'\')',danger:true}
+  ]);
+}
+async function renamePv(pid){
+  var name=await appPrompt('New provider name:');
+  if(!name||!name.trim()) return;
+  try{
+    var r=await fetch(API+'/api/providers/'+pid,{method:'PUT',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+    if(r.ok){toast('Provider renamed');refreshProviders();if(_activePvId===pid)loadProviderDetail(pid);}
+    else toast('Rename failed',true);
+  }catch(e){toast(e.message,true);}
+}
+async function confirmDeletePv(pid){
+  if(!confirm('Delete this provider and all its test data?')) return;
+  _activePvId=pid;
+  await deleteProvider();
+}
+
+// ── Session Groups ─────────────────────────────────────────────────────────
+var _sgData=[], _activeGroupId=null, _sgDragId=null;
+
+async function loadSessionGroups(){
+  try{
+    var r=await fetch(API+'/api/session-groups');
+    if(r.ok){_sgData=await r.json();renderSessionGroups();}
+  }catch(e){}
+}
+
+function renderSessionGroups(){
+  var el=document.getElementById('sgList');
+  if(!el) return;
+  if(!_sgData.length){el.innerHTML='<div class="empty" style="padding:12px">No groups yet. Click + GROUP.</div>';return;}
+  // "ALL" row first
+  var allRow='<div class="sg-row'+(_activeGroupId===null?' active':'')+'" onclick="selectSessionGroup(null)">'
+    +'<span class="sg-fav" style="color:var(--muted)">⊙</span>'
+    +'<span class="sg-name">All Sessions</span>'
+    +'<span class="sg-count">'+_sgData.reduce(function(s,g){return s+g.session_ids.length;},0)+'</span>'
+    +'</div>';
+  var rows=_sgData.map(function(g){
+    var isActive=_activeGroupId===g.id;
+    return '<div class="sg-row'+(isActive?' active':'')+'" draggable="true"'
+      +' data-id="'+g.id+'"'
+      +' onclick="selectSessionGroup(\''+g.id+'\')"'
+      +' oncontextmenu="sgContextMenu(event,\''+g.id+'\')"'
+      +' ondragstart="sgDragStart(event,\''+g.id+'\')"'
+      +' ondragover="sgDragOver(event)"'
+      +' ondragleave="sgDragLeave(event)"'
+      +' ondrop="sgDrop(event,\''+g.id+'\')">'
+      +'<span class="sg-fav" style="color:'+(g.favorited?'var(--gold)':'var(--border-hi)')+'" onclick="toggleFavoriteGroup(event,\''+g.id+'\')" title="Toggle favorite">'+(g.favorited?'★':'☆')+'</span>'
+      +'<span class="sg-name">'+esc(g.name)+'</span>'
+      +'<span class="sg-count">'+g.session_ids.length+' sess</span>'
+      +'</div>';
+  }).join('');
+  el.innerHTML=allRow+rows;
+}
+
+function selectSessionGroup(id){
+  _activeGroupId=id;
+  renderSessionGroups();
+  renderProviderList(); // filter by group if needed
+}
+
+function sgContextMenu(e,gid){
+  e.stopPropagation();
+  var g=_sgData.find(function(x){return x.id===gid;});
+  showCtxMenu(e,[
+    {label:'Rename',action:'renameSessionGroup(\''+gid+'\')'},
+    {label:(g&&g.favorited?'Unfavorite':'Favorite'),action:'toggleFavoriteGroup(null,\''+gid+'\')'},
+    {label:'Delete',action:'deleteSessionGroup(\''+gid+'\')',danger:true}
+  ]);
+}
+
+async function createSessionGroup(){
+  var name=await appPrompt('New group name:');
+  if(!name||!name.trim()) return;
+  try{
+    var r=await fetch(API+'/api/session-groups',{method:'POST',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+    if(r.ok){toast('Group "'+name.trim()+'" created');await loadSessionGroups();}
+    else toast('Error creating group',true);
+  }catch(e){toast(e.message,true);}
+}
+async function renameSessionGroup(gid){
+  var g=_sgData.find(function(x){return x.id===gid;});
+  var name=await appPrompt('New group name:',g?g.name:'');
+  if(!name||!name.trim()) return;
+  try{
+    await fetch(API+'/api/session-groups/'+gid,{method:'PUT',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+    await loadSessionGroups();
+  }catch(e){toast(e.message,true);}
+}
+async function deleteSessionGroup(gid){
+  if(!confirm('Delete this group?')) return;
+  try{
+    await fetch(API+'/api/session-groups/'+gid,{method:'DELETE'});
+    if(_activeGroupId===gid) _activeGroupId=null;
+    await loadSessionGroups();
+  }catch(e){toast(e.message,true);}
+}
+async function toggleFavoriteGroup(e,gid){
+  if(e) e.stopPropagation();
+  var g=_sgData.find(function(x){return x.id===gid;});
+  if(!g) return;
+  try{
+    await fetch(API+'/api/session-groups/'+gid,{method:'PUT',body:JSON.stringify({favorited:!g.favorited}),headers:{'Content-Type':'application/json'}});
+    await loadSessionGroups();
+  }catch(e){}
+}
+function sgDragStart(e,id){ _sgDragId=id; e.dataTransfer.effectAllowed='move'; }
+function sgDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function sgDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+async function sgDrop(e,targetId){
+  e.currentTarget.classList.remove('drag-over');
+  if(!_sgDragId||_sgDragId===targetId) return;
+  var from=_sgData.find(function(x){return x.id===_sgDragId;});
+  var to=_sgData.find(function(x){return x.id===targetId;});
+  if(!from||!to) return;
+  var tmp=from.order; from.order=to.order; to.order=tmp;
+  _sgDragId=null;
+  try{
+    await Promise.all([
+      fetch(API+'/api/session-groups/'+from.id,{method:'PUT',body:JSON.stringify({order:from.order}),headers:{'Content-Type':'application/json'}}),
+      fetch(API+'/api/session-groups/'+to.id,{method:'PUT',body:JSON.stringify({order:to.order}),headers:{'Content-Type':'application/json'}})
+    ]);
+    await loadSessionGroups();
+  }catch(e){}
+}
+
+// ── Custom dialog (replaces prompt() which is unavailable in Electron) ────
+var _appDialogResolve=null;
+function appPrompt(msg,def){
+  return new Promise(function(resolve){
+    _appDialogResolve=resolve;
+    document.getElementById('appDialogMsg').textContent=msg;
+    var inp=document.getElementById('appDialogInput');
+    inp.value=def||'';
+    document.getElementById('appDialog').style.display='flex';
+    setTimeout(function(){inp.focus();inp.select();},60);
+    inp.onkeydown=function(e){
+      if(e.key==='Enter'){e.preventDefault();appDialogOk();}
+      if(e.key==='Escape'){e.preventDefault();appDialogCancel();}
+    };
+  });
+}
+function appDialogOk(){
+  var val=document.getElementById('appDialogInput').value;
+  document.getElementById('appDialog').style.display='none';
+  if(_appDialogResolve){_appDialogResolve(val);_appDialogResolve=null;}
+}
+function appDialogCancel(){
+  document.getElementById('appDialog').style.display='none';
+  if(_appDialogResolve){_appDialogResolve(null);_appDialogResolve=null;}
+}
+// Close dialog on backdrop click
+document.getElementById('appDialog').addEventListener('mousedown',function(e){
+  if(e.target===this) appDialogCancel();
+});
+
+// ── Group Picker (for save-to-group flow) ─────────────────────────────────
+var _groupPickerResolve=null;
+
+async function pickGroupForSave(){
+  // Refresh group list from server first
+  await loadSessionGroups();
+  if(!_sgData.length){
+    // No groups exist — must create one before saving
+    toast('Create a group first to organise your lists.',true);
+    var name=await appPrompt('Name your first group:');
+    if(!name||!name.trim()) return false;
+    try{
+      var r=await fetch(API+'/api/session-groups',{method:'POST',
+        body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+      if(!r.ok){toast('Could not create group.',true);return false;}
+      var d=await r.json();
+      await loadSessionGroups();
+      toast('Group "'+name.trim()+'" created');
+      return d.id;
+    }catch(e){toast(e.message,true);return false;}
+  }
+  // Groups exist — show picker
+  return await showGroupPicker();
+}
+
+function showGroupPicker(){
+  return new Promise(function(resolve){
+    _groupPickerResolve=resolve;
+    var listEl=document.getElementById('groupPickerList');
+    listEl.innerHTML=_sgData.map(function(g){
+      var fav=g.favorited?'★':'☆';
+      var favColor=g.favorited?'var(--gold)':'var(--border-hi)';
+      return '<div class="sli" style="cursor:pointer;user-select:none" onmousedown="event.stopPropagation()" onclick="groupPickerSelect(\''+g.id+'\')">'
+        +'<span style="font-size:13px;color:'+favColor+';flex-shrink:0">'+fav+'</span>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div class="sli-name">'+esc(g.name)+'</div>'
+        +'<div class="sli-meta">'+g.session_ids.length+' items</div>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+    document.getElementById('groupPickerDialog').style.display='flex';
+  });
+}
+function groupPickerSelect(gid){
+  document.getElementById('groupPickerDialog').style.display='none';
+  if(_groupPickerResolve){_groupPickerResolve(gid);_groupPickerResolve=null;}
+}
+function groupPickerCancel(){
+  document.getElementById('groupPickerDialog').style.display='none';
+  if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}
+}
+async function groupPickerCreateNew(){
+  document.getElementById('groupPickerDialog').style.display='none';
+  var name=await appPrompt('New group name:');
+  if(!name||!name.trim()){
+    // User cancelled — put the picker back
+    showGroupPicker().then(function(r){if(_groupPickerResolve){_groupPickerResolve(r);_groupPickerResolve=null;}});
+    return;
+  }
+  try{
+    var r=await fetch(API+'/api/session-groups',{method:'POST',
+      body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
+    if(!r.ok){toast('Could not create group.',true);if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}return;}
+    var d=await r.json();
+    await loadSessionGroups();
+    toast('Group "'+name.trim()+'" created');
+    if(_groupPickerResolve){_groupPickerResolve(d.id);_groupPickerResolve=null;}
+  }catch(e){
+    toast(e.message,true);
+    if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}
+  }
+}
+// Close group picker on backdrop click
+document.getElementById('groupPickerDialog').addEventListener('mousedown',function(e){
+  if(e.target===this) groupPickerCancel();
+});
+
+// ── Debug log ──────────────────────────────────────────────────────────────
+var _dbgEntries=[];
+function dbgLog(msg,level){
+  var ts=new Date().toISOString().replace('T',' ').split('.')[0];
+  _dbgEntries.push({ts:ts,msg:String(msg),level:level||'info'});
+  if(_dbgEntries.length>500) _dbgEntries.shift();
+  // Live-update if settings page is open
+  var el=document.getElementById('dbgLogEl');
+  if(el&&document.getElementById('settingsPage').style.display!=='none') renderDbgLog();
+}
+function renderDbgLog(){
+  var el=document.getElementById('dbgLogEl');
+  if(!el) return;
+  if(!_dbgEntries.length){el.innerHTML='<span class="dbg-info">— No log entries yet —</span>';return;}
+  el.innerHTML=_dbgEntries.slice().reverse().map(function(e){
+    var cls='dbg-'+e.level;
+    return '<span class="'+cls+'">'+esc(e.ts)+'  '+esc(e.msg)+'</span>';
+  }).join('\n');
+}
+async function copyDbgLog(){
+  var text=_dbgEntries.map(function(e){return e.ts+'  ['+e.level.toUpperCase()+']  '+e.msg;}).join('\n');
+  try{await navigator.clipboard.writeText(text);toast('Logs copied to clipboard');}
+  catch(err){downloadTextFile('proxy-tester-log.txt',text);}
+}
+function clearDbgLog(){_dbgEntries=[];renderDbgLog();toast('Log cleared');}
+
+// Patch key functions to emit debug log entries
+var _origDoRefresh=doRefresh;
+doRefresh=async function(){
+  try{await _origDoRefresh.apply(this,arguments);}
+  catch(e){dbgLog('doRefresh error: '+e.message,'err');}
+};
+
+// ── Light mode ─────────────────────────────────────────────────────────────
+function applyLightMode(on){
+  document.body.classList.toggle('light-mode',on);
+  localStorage.setItem('lightMode',on?'1':'0');
+  dbgLog('Light mode '+(on?'enabled':'disabled'));
+}
+(function(){
+  if(localStorage.getItem('lightMode')==='1'){
+    document.body.classList.add('light-mode');
+    var tog=document.getElementById('lightModeToggle');
+    if(tog) tog.checked=true;
+  }
+})();
+
+// ── Integrations ───────────────────────────────────────────────────────────
+function getIntegrations(){ try{return JSON.parse(localStorage.getItem('integrations')||'[]');}catch{return[];} }
+function setIntegrations(a){ localStorage.setItem('integrations',JSON.stringify(a)); }
+
+var INT_PROVIDERS={
+  webshare:    {label:'Webshare',    hint:'List ID (optional)',  url:'https://proxy.webshare.io/api/v2/proxy/list/?mode=direct&page=1&page_size={qty}'},
+  'proxies.fo':{label:'Proxies.fo',  hint:'Plan ID',            url:'https://proxies.fo/api/v1/proxy-list?apiToken={key}&quantity={qty}'},
+  iproyal:     {label:'IPRoyal',     hint:'List ID (optional)',  url:'https://iproyal.com/api/proxies?token={key}&count={qty}'},
+  brightdata:  {label:'Bright Data', hint:'Zone / List ID',      url:'https://brightdata.com/api/zone/ips?zone={listId}'},
+  custom:      {label:'Custom',      hint:'Leave blank',         url:''}
+};
+
+function intTypeChanged(){
+  var t=document.getElementById('intType').value;
+  var p=INT_PROVIDERS[t]||{};
+  var extraHtml='';
+  if(t==='custom'){
+    extraHtml='<label>ENDPOINT URL <span style="font-weight:400;color:var(--muted);text-transform:none">(use {key} and {qty} placeholders)</span></label>'
+      +'<input type="text" id="intCustomUrl" placeholder="https://api.example.com/proxies?token={key}&count={qty}" style="margin-bottom:10px">';
+  }
+  document.getElementById('intExtraFields').innerHTML=extraHtml;
+}
+
+function addIntegration(){
+  var t=document.getElementById('intType').value;
+  var name=document.getElementById('intName').value.trim();
+  var key=document.getElementById('intApiKey').value.trim();
+  if(!name){toast('Enter a display name.',true);return;}
+  if(!key){toast('Enter an API key.',true);return;}
+  var p=INT_PROVIDERS[t]||{};
+  var customUrl=t==='custom'?(document.getElementById('intCustomUrl')||{value:''}).value.trim():'';
+  if(t==='custom'&&!customUrl){toast('Enter a custom endpoint URL.',true);return;}
+  var integrations=getIntegrations();
+  integrations.push({id:'int_'+Date.now(),type:t,name:name,key:key,
+    url:customUrl||p.url||'',created:new Date().toISOString()});
+  setIntegrations(integrations);
+  document.getElementById('intName').value='';
+  document.getElementById('intApiKey').value='';
+  document.getElementById('intExtraFields').innerHTML='';
+  renderIntegrationList();
+  refreshApiTab();
+  dbgLog('Integration added: '+name+' ('+t+')');
+  toast('Integration "'+name+'" added');
+}
+
+function renderIntegrationList(){
+  var list=getIntegrations();
+  var el=document.getElementById('integrationList');
+  if(!el) return;
+  if(!list.length){el.innerHTML='<div class="empty">No integrations yet. Add one above.</div>';return;}
+  el.innerHTML=list.map(function(i){
+    var p=INT_PROVIDERS[i.type]||{label:i.type};
+    return '<div class="integration-card">'
+      +'<div class="integration-icon">🔗</div>'
+      +'<div class="integration-info">'
+      +'<div class="integration-name">'+esc(i.name)+'</div>'
+      +'<div class="integration-desc">'+esc(p.label||i.type)+' · Key: '+esc(i.key.slice(0,8))+'••••</div>'
+      +'</div>'
+      +'<button class="btn btn-red btn-sm" style="align-self:center" onclick="deleteIntegration(\''+i.id+'\')">✕</button>'
+      +'</div>';
+  }).join('');
+}
+
+function deleteIntegration(id){
+  var list=getIntegrations().filter(function(i){return i.id!==id;});
+  setIntegrations(list);
+  renderIntegrationList();
+  refreshApiTab();
+  toast('Integration removed');
+}
+
+// ── API tab in Tester ──────────────────────────────────────────────────────
+function refreshApiTab(){
+  var sel=document.getElementById('apiIntegrationSel');
+  var fieldsEl=document.getElementById('apiIntegrationFields');
+  var noIntEl=document.getElementById('apiNoIntegrations');
+  if(!sel) return;
+  var list=getIntegrations();
+  if(!list.length){
+    sel.innerHTML='<option value="">— No integrations configured —</option>';
+    if(fieldsEl) fieldsEl.style.display='none';
+    if(noIntEl)  noIntEl.style.display='block';
+    return;
+  }
+  if(noIntEl) noIntEl.style.display='none';
+  sel.innerHTML='<option value="">— Select an integration —</option>'
+    +list.map(function(i){return '<option value="'+i.id+'">'+esc(i.name)+'</option>';}).join('');
+}
+function apiIntegrationChanged(){
+  var id=document.getElementById('apiIntegrationSel').value;
+  var fieldsEl=document.getElementById('apiIntegrationFields');
+  if(!fieldsEl) return;
+  fieldsEl.style.display=id?'block':'none';
+  if(id){
+    var integ=getIntegrations().find(function(i){return i.id===id;});
+    var p=integ?INT_PROVIDERS[integ.type]||{}:{};
+    var hint=document.getElementById('apiListIdHint');
+    if(hint) hint.textContent=p.hint?'('+p.hint+')':'';
+  }
+}
+async function fetchFromApi(){
+  var id=document.getElementById('apiIntegrationSel').value;
+  if(!id){toast('Select an integration.',true);return;}
+  var integ=getIntegrations().find(function(i){return i.id===id;});
+  if(!integ){toast('Integration not found.',true);return;}
+  var listId=document.getElementById('apiListId').value.trim();
+  var qty=parseInt(document.getElementById('apiQty').value)||1000;
+  var statusEl=document.getElementById('apiStatus');
+  statusEl.textContent='Fetching…'; statusEl.style.color='var(--muted)';
+  dbgLog('API fetch: '+integ.name+' qty='+qty);
+  try{
+    var endpoint=integ.url
+      .replace('{key}',encodeURIComponent(integ.key))
+      .replace('{qty}',qty)
+      .replace('{listId}',encodeURIComponent(listId||''));
+    var r=await fetch(endpoint);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var text=await r.text();
+    var lines=text.split('\n').map(function(l){return l.trim();}).filter(function(l){return l&&!l.startsWith('#');});
+    if(!lines.length) throw new Error('No proxies returned');
+    // Load into paste area and switch to paste tab
+    document.getElementById('pasteArea').value=lines.join('\n');
+    document.getElementById('pasteName').value=integ.name+' — API pull';
+    countPaste();
+    switchTab('paste');
+    statusEl.textContent='✓ '+lines.length.toLocaleString()+' proxies loaded into Paste tab';
+    statusEl.style.color='var(--accent)';
+    dbgLog('API fetch OK: '+lines.length+' proxies from '+integ.name,'ok');
+    toast('✓ '+lines.length.toLocaleString()+' proxies fetched from '+integ.name);
+  }catch(err){
+    statusEl.textContent='✗ Error: '+err.message;
+    statusEl.style.color='var(--fail)';
+    dbgLog('API fetch error ('+integ.name+'): '+err.message,'err');
+    toast('Fetch failed: '+err.message,true);
+  }
+}
+
+// ── Patch prompt() usage → appPrompt() ────────────────────────────────────
+// All rename/create functions that previously used prompt() now use appPrompt()
+// (Functions renameSess, renamePv, renameSessionGroup, createSessionGroup,
+//  deleteIntegration are defined below with appPrompt already)
+
+// ── Init ───────────────────────────────────────────────────────────────────
+updateSavedTab();
+startPolling();
+loadSessionGroups();
+intTypeChanged(); // init integration extra fields
+renderIntegrationList();
+dbgLog('Proxy Tester v1.05 started');
+</script>
+</body>
+</html>

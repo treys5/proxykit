@@ -1,0 +1,16 @@
+﻿# Build output
+dist/
+
+# Dependencies (reinstalled via npm install)
+node_modules/
+
+# Bundled Node.js runtime
+node/
+
+# Runtime data
+results/
+startup.log
+
+# OS junk
+.DS_Store
+Thumbs.db
