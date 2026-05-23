@@ -46,9 +46,18 @@ if ($CanLaunchElectron -and (-not (Test-Path $ElectronExe))) {
     $StdoutLog = [System.IO.Path]::GetTempFileName()
     $StderrLog = [System.IO.Path]::GetTempFileName()
 
+    # Start-Process cannot launch .cmd/.bat directly -- route through cmd.exe
+    if ($NpmExe -match '\.(cmd|bat)$') {
+        $ProcExe  = "$env:SystemRoot\System32\cmd.exe"
+        $ProcArgs = @("/c", $NpmExe, "install", "--prefer-offline", "--no-progress")
+    } else {
+        $ProcExe  = $NpmExe
+        $ProcArgs = @("install", "--prefer-offline", "--no-progress")
+    }
+
     Push-Location $AppDir
-    $Proc = Start-Process -FilePath $NpmExe `
-        -ArgumentList @("install", "--prefer-offline", "--no-progress") `
+    $Proc = Start-Process -FilePath $ProcExe `
+        -ArgumentList $ProcArgs `
         -WorkingDirectory $AppDir -PassThru -NoNewWindow `
         -RedirectStandardOutput $StdoutLog -RedirectStandardError $StderrLog
     Pop-Location
