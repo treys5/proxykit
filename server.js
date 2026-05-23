@@ -3,12 +3,13 @@
 
 const http = require('http');
 const net  = require('net');
+const tls  = require('tls');
 const fs   = require('fs');
 const path = require('path');
 const url  = require('url');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.07';
+const APP_VERSION = '1.08';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -350,12 +351,12 @@ function tcpPingThrough(proxy, host, port, timeoutMs) {
   });
 }
 
-// ── Core proxy test — captures response body, bytes used, and PX markers ──────
+// ── Core proxy test — captures response body, bytes used, PX markers, SSL info ─
 function testProxyOnce(proxy, testUrl, timeoutMs) {
   return new Promise(function(resolve) {
     const start = Date.now();
-    let settled = false;
-    function finish(ok, body, bytesSent, bytesReceived) {
+    var settled = false;
+    function finish(ok, body, bytesSent, bytesReceived, extra) {
       if (settled) return;
       settled = true;
       var px = false;
@@ -365,45 +366,103 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
           if (bl.includes(PX_MARKERS[pi])) { px = true; break; }
         }
       }
-      resolve({ ok, ms: Date.now() - start, body: body || null,
-                bytes_sent: bytesSent || 0, bytes_received: bytesReceived || 0,
-                px_challenge: px });
+      resolve(Object.assign({ ok, ms: Date.now() - start, body: body || null,
+        bytes_sent: bytesSent || 0, bytes_received: bytesReceived || 0,
+        px_challenge: px }, extra || {}));
     }
-    const parsed     = new URL(testUrl);
-    const isHttps    = parsed.protocol === 'https:';
-    const targetHost = parsed.hostname;
-    const targetPort = parseInt(parsed.port) || (isHttps ? 443 : 80);
-    const timer = setTimeout(function() { sock.destroy(); finish(false, null, 0, 0); }, timeoutMs);
-    const sock  = net.createConnection({ host: proxy.host, port: proxy.port });
+
+    var parsed     = new URL(testUrl);
+    var isHttps    = parsed.protocol === 'https:';
+    var targetHost = parsed.hostname;
+    var targetPort = parseInt(parsed.port) || (isHttps ? 443 : 80);
+    var targetPath = (parsed.pathname || '/') + (parsed.search || '');
+
+    var bytesSent = 0, bytesReceived = 0;
+    var timer = setTimeout(function() { sock.destroy(); finish(false, null, bytesSent, bytesReceived); }, timeoutMs);
+    var sock  = net.createConnection({ host: proxy.host, port: proxy.port });
     sock.setTimeout(timeoutMs);
-    sock.on('timeout', function() { sock.destroy(); clearTimeout(timer); finish(false, null, 0, 0); });
-    sock.on('error',   function() { sock.destroy(); clearTimeout(timer); finish(false, null, 0, 0); });
+    sock.on('timeout', function() { sock.destroy(); clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
+    sock.on('error',   function() { sock.destroy(); clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
+
     sock.on('connect', function() {
       var auth = proxy.username
         ? ('Proxy-Authorization: Basic ' + Buffer.from(proxy.username + ':' + proxy.password).toString('base64') + '\r\n')
         : '';
+
       if (isHttps) {
-        var connectReq = 'CONNECT ' + targetHost + ':' + targetPort + ' HTTP/1.1\r\nHost: ' + targetHost + ':' + targetPort + '\r\n' + auth + '\r\n';
+        // Step 1: CONNECT tunnel
+        var connectReq = 'CONNECT ' + targetHost + ':' + targetPort + ' HTTP/1.1\r\nHost: '
+          + targetHost + ':' + targetPort + '\r\n' + auth + '\r\n';
         sock.write(connectReq);
-        var bytesSentH = Buffer.byteLength(connectReq);
-        var bytesReceivedH = 0;
-        var buf = '';
-        sock.on('data', function(c) {
-          buf += c.toString('binary');
-          bytesReceivedH += c.length;
-          if (buf.indexOf('\r\n\r\n') === -1) return;
-          clearTimeout(timer); sock.destroy(); finish(/^HTTP\/1\.[01] 200/.test(buf), null, bytesSentH, bytesReceivedH);
+        bytesSent += Buffer.byteLength(connectReq);
+
+        var connectBuf = Buffer.alloc(0);
+        sock.on('data', function onConnectData(chunk) {
+          bytesReceived += chunk.length;
+          connectBuf = Buffer.concat([connectBuf, chunk]);
+          if (connectBuf.indexOf('\r\n\r\n') === -1) return;
+          sock.removeListener('data', onConnectData);
+
+          var connectStr = connectBuf.toString('latin1');
+          if (!/^HTTP\/1\.[01] 200/.test(connectStr)) {
+            clearTimeout(timer); sock.destroy();
+            finish(false, null, bytesSent, bytesReceived);
+            return;
+          }
+
+          // Step 2: TLS handshake over the established tunnel
+          var tlsSock = tls.connect({ socket: sock, servername: targetHost, rejectUnauthorized: false });
+          tlsSock.setTimeout(timeoutMs);
+          tlsSock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
+          tlsSock.on('timeout', function() { tlsSock.destroy(); clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
+
+          tlsSock.on('secureConnect', function() {
+            // Detect SSL inspection: cert CN should match the target domain
+            var cert = tlsSock.getPeerCertificate();
+            var sslInspected = false;
+            if (cert && cert.subject && cert.subject.CN) {
+              var cn = cert.subject.CN.replace(/^\*\./, '');
+              var domainBase = targetHost.split('.').slice(-2).join('.');
+              sslInspected = !domainBase.endsWith(cn) && !cn.endsWith(domainBase);
+            }
+
+            // Step 3: GET the actual page
+            var getReq = 'GET ' + targetPath + ' HTTP/1.0\r\n'
+              + 'Host: ' + targetHost + '\r\n'
+              + 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n'
+              + 'Accept: text/html,application/xhtml+xml\r\n'
+              + 'Accept-Language: en-US,en;q=0.9\r\n'
+              + 'Connection: close\r\n\r\n';
+            tlsSock.write(getReq);
+            bytesSent += Buffer.byteLength(getReq);
+
+            var chunks = [];
+            tlsSock.on('data', function(c) { chunks.push(c); bytesReceived += c.length; });
+            tlsSock.on('end', function() {
+              clearTimeout(timer);
+              var raw = Buffer.concat(chunks).toString('latin1');
+              var headerEnd = raw.indexOf('\r\n\r\n');
+              var statusLine = raw.split('\r\n')[0] || '';
+              var m = statusLine.match(/HTTP\/1\.[01] (\d+)/);
+              var status = m ? parseInt(m[1]) : 0;
+              var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
+              var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
+              if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
+              finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { ssl_inspected: sslInspected });
+            });
+          });
         });
+
       } else {
-        // Use HTTP/1.0 to avoid chunked encoding from the origin server.
-        // Proxies that only speak 1.1 will still work — they upgrade internally.
+        // Plain HTTP — GET directly through proxy
         var getReq = 'GET ' + testUrl + ' HTTP/1.0\r\nHost: ' + targetHost
-          + '\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n' + auth + '\r\n';
+          + '\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n'
+          + 'Accept: text/html,application/xhtml+xml\r\n'
+          + 'Connection: close\r\n' + auth + '\r\n';
         sock.write(getReq);
-        var bytesSentG = Buffer.byteLength(getReq, 'latin1');
+        bytesSent += Buffer.byteLength(getReq, 'latin1');
         var chunks = [];
-        var bytesReceivedG = 0;
-        sock.on('data', function(c) { chunks.push(c); bytesReceivedG += c.length; });
+        sock.on('data', function(c) { chunks.push(c); bytesReceived += c.length; });
         sock.on('end', function() {
           clearTimeout(timer);
           var raw = Buffer.concat(chunks).toString('latin1');
@@ -414,9 +473,9 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
           var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
           var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
           if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
-          finish(status >= 200 && status < 500, body, bytesSentG, bytesReceivedG);
+          finish(status >= 200 && status < 500, body, bytesSent, bytesReceived);
         });
-        sock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSentG, 0); });
+        sock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSent, 0); });
       }
     });
   });
@@ -469,6 +528,17 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
   var targetTested = targetAttempts.length > 0;
   var targetPass   = targetTested ? goodTarget.length > 0 : null;
 
+  // Rotating detection: if multiple ip-api replies have different egress IPs, proxy rotates
+  var egressIPs = goodIpapi.map(function(a) {
+    var d = parseIpApiResponse(a.body); return d ? d.query : null;
+  }).filter(Boolean);
+  var uniqueEgress = Array.from(new Set(egressIPs));
+  var rotating = egressIPs.length >= 2 && uniqueEgress.length > 1;
+
+  // SSL inspection: any attempt flagged it
+  var sslInspected = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts)
+    .some(function(a){ return a.ssl_inspected; });
+
   var pxChallenge = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts)
     .some(function(a){ return a.px_challenge; });
   var targetPx = targetAttempts.some(function(a){ return a.px_challenge; });
@@ -485,7 +555,8 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
              egress_ip:null, ip_info:null, ip_type:'unknown',
              httpbin_pass:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
              bytes_sent:totalBytesSent, bytes_received:totalBytesRecv,
-             px_challenge:pxChallenge, edge_rtt:null };
+             px_challenge:pxChallenge, edge_rtt:null,
+             rotating:false, ssl_inspected:false };
   }
 
   var lats = goodIpapi.length ? goodIpapi.map(function(a){return a.ms;}) : goodHttpbin.map(function(a){return a.ms;});
@@ -549,6 +620,7 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
     target_pass: targetPass, target_ms: targetMs, target_px: targetPx,
     bytes_sent: totalBytesSent, bytes_received: totalBytesRecv,
     px_challenge: pxChallenge, edge_rtt: edgeRtt,
+    rotating: rotating, ssl_inspected: sslInspected,
   };
 }
 
@@ -655,6 +727,26 @@ function analyzeEgressIPs(passed) {
     }
   });
 
+  // Subnet crowding — /24 blocks with 3+ proxies risk being burned together
+  var subnetCounts = {};
+  passed.forEach(function(r) {
+    if (!r.egress_ip) return;
+    var parts = r.egress_ip.split('.');
+    if (parts.length === 4) {
+      var sn = parts.slice(0, 3).join('.') + '.0/24';
+      subnetCounts[sn] = (subnetCounts[sn] || 0) + 1;
+    }
+  });
+  var crowdedSubnets = Object.keys(subnetCounts)
+    .filter(function(sn){ return subnetCounts[sn] >= 3; })
+    .sort(function(a,b){ return subnetCounts[b] - subnetCounts[a]; })
+    .slice(0, 10)
+    .map(function(sn){ return { subnet: sn, count: subnetCounts[sn] }; });
+
+  // Rotating proxy count
+  var rotatingCount = passed.filter(function(r){ return r.rotating; }).length;
+  var sslInspectedCount = passed.filter(function(r){ return r.ssl_inspected; }).length;
+
   // Top reused IPs
   var reusedIPs = Object.keys(ipCounts)
     .filter(function(ip){ return ipCounts[ip] > 1; })
@@ -705,6 +797,9 @@ function analyzeEgressIPs(passed) {
     top_reused_ips:    reusedIPs,
     top_asns:          topASNs,
     top_isps:          topISPs,
+    crowded_subnets:   crowdedSubnets,
+    rotating_count:    rotatingCount,
+    ssl_inspected_count: sslInspectedCount,
   };
 }
 
@@ -1264,20 +1359,24 @@ const server = http.createServer(async function(req,res){
     }
     if(sub==='/elite'&&method==='GET'){
       if(job.status!=='done') return jsonRes(res,{error:'Not complete'},400);
-      var minScore   = parseInt(parsed.query.min_score  || '60');
-      var maxMs      = parseInt(parsed.query.max_ms     || '800');
-      var excludeDC  = parsed.query.exclude_dc  !== 'false';
-      var excludePX  = parsed.query.exclude_px  !== 'false';
-      var dedupeIP   = parsed.query.dedupe_ip   !== 'false';
-      var maxPerAsn  = parseInt(parsed.query.max_per_asn  || '5');
-      var maxPerCity = parseInt(parsed.query.max_per_city || '3');
-      var seenIPs    = new Set();
+      var minScore      = parseInt(parsed.query.min_score  || '60');
+      var maxMs         = parseInt(parsed.query.max_ms     || '800');
+      var excludeDC     = parsed.query.exclude_dc       !== 'false';
+      var excludePX     = parsed.query.exclude_px       !== 'false';
+      var dedupeIP      = parsed.query.dedupe_ip        !== 'false';
+      var excludeSSL    = parsed.query.exclude_ssl      === 'true';
+      var excludeRot    = parsed.query.exclude_rotating === 'true';
+      var maxPerAsn     = parseInt(parsed.query.max_per_asn  || '5');
+      var maxPerCity    = parseInt(parsed.query.max_per_city || '3');
+      var seenIPs       = new Set();
       var list = job.top_proxies.filter(function(p){
         if (p.score < minScore) return false;
         if (p.avg_ms != null && p.avg_ms > maxMs) return false;
-        if (excludeDC && (p.ip_type==='datacenter'||p.ip_type==='private')) return false;
-        if (excludePX && p.px_challenge) return false;
-        if (p.target_pass === false) return false; // always drop target failures
+        if (excludeDC  && (p.ip_type==='datacenter'||p.ip_type==='private')) return false;
+        if (excludePX  && p.px_challenge)  return false;
+        if (excludeSSL && p.ssl_inspected) return false;
+        if (excludeRot && p.rotating)      return false;
+        if (p.target_pass === false) return false;
         if (dedupeIP && p.egress_ip) {
           if (seenIPs.has(p.egress_ip)) return false;
           seenIPs.add(p.egress_ip);

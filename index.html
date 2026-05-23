@@ -436,7 +436,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.07</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.08</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -445,6 +445,14 @@ body.light-mode .ip-group{background:#ffffff;}
   <button class="page-nav-btn"        id="navSettings"     onclick="setPage('settings')">SETTINGS</button>
   <button class="page-nav-btn"        id="navIntegrations" onclick="setPage('integrations')">INTEGRATIONS</button>
 </nav>
+
+<!-- ── Update banner ─────────────────────────────────────────────────────── -->
+<div id="updateBanner" style="display:none;background:#1a1a2e;border-bottom:1px solid var(--accent);padding:7px 20px;display:none;align-items:center;gap:12px;">
+  <span style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em">UPDATE AVAILABLE</span>
+  <span id="updateBannerText" style="font-size:11px;color:var(--muted);flex:1"></span>
+  <a id="updateBannerLink" href="#" target="_blank" style="font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;border:1px solid var(--accent);padding:3px 10px;border-radius:var(--r-xs);">VIEW RELEASE</a>
+  <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+</div>
 
 <!-- ── Live progress bar ──────────────────────────────────────────────────── -->
 <div id="liveProgressBar" style="display:none;position:sticky;top:0;z-index:99;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 20px;">
@@ -540,7 +548,7 @@ body.light-mode .ip-group{background:#ffffff;}
       <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting"
         title="ip-api with full fields — required for residential/DC/mobile detection.">
       <label>TARGET URL <span style="font-weight:400;color:var(--muted)">(optional — tested in parallel, e.g. walmart.com/robots.txt)</span></label>
-      <input type="text" id="targetUrl" value="http://www.walmart.com/robots.txt" placeholder="http://www.walmart.com/robots.txt" title="Secondary target tested alongside ip-api. Proxies that fail this URL get a heavy score penalty.">
+      <input type="text" id="targetUrl" value="https://www.walmart.com/search?q=iphone" placeholder="https://www.walmart.com/search?q=iphone" title="Secondary target tested alongside ip-api. Proxies that fail this URL get a heavy score penalty.">
       <div class="row2">
         <div><label>CONCURRENCY</label><input type="number" id="concurrency" value="150" min="10" max="500"></div>
         <div><label>TIMEOUT (s)</label><input type="number" id="timeout" value="10" min="1" max="60" step=".5"></div>
@@ -747,6 +755,14 @@ body.light-mode .ip-group{background:#ffffff;}
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeDC" checked> Exclude datacenter</label>
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludePX" checked> Exclude PX hits</label>
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteDedupeIP" checked> Dedupe by egress IP</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeSSL"> Exclude SSL inspect</label>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeRotating"> Exclude rotating</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <select id="elitePreset" onchange="loadElitePreset()" style="font-size:11px;padding:4px 8px;margin:0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--r-xs);">
+          <option value="">— Presets —</option>
+        </select>
+        <button class="btn btn-out btn-sm" onclick="saveElitePreset()">SAVE PRESET</button>
         <button class="btn btn-sm" style="margin-left:auto;padding:5px 18px" onclick="eliteCopy()">⬡ ELITE COPY</button>
         <span id="eliteCopyCount" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
       </div>
@@ -1426,6 +1442,9 @@ function renderAnalysis(a, containerId){
   if(a.reuse_rate_pct>30) alerts+='<div class="alert-box alert-bad">⚠ '+a.reuse_rate_pct+'% IP reuse rate — pool is smaller than session count implies</div>';
   else if(a.reuse_rate_pct>10) alerts+='<div class="alert-box alert-warn">⚡ '+a.reuse_rate_pct+'% IP reuse — some IPs shared across sessions</div>';
   if(a.flagged_count>0) alerts+='<div class="alert-box alert-warn">⚡ '+a.flagged_count+' proxies flagged as proxy/VPN by ip-api</div>';
+  if((a.crowded_subnets||[]).length>0) alerts+='<div class="alert-box alert-warn">⚡ '+(a.crowded_subnets||[]).length+' /24 subnet'+(a.crowded_subnets.length>1?'s':'')+' with 3+ proxies — these IPs burn together if one is flagged</div>';
+  if((a.ssl_inspected_count||0)>0) alerts+='<div class="alert-box alert-bad">⚠ '+a.ssl_inspected_count+' proxies intercepting SSL — your HTTPS traffic is being read</div>';
+  if((a.rotating_count||0)>0) alerts+='<div class="alert-box alert-warn">⚡ '+a.rotating_count+' rotating proxies — egress IP changes between requests</div>';
   if(a.quality_score>=70&&!alerts) alerts='<div class="alert-box alert-good">✓ Pool looks clean — good residential diversity</div>';
 
   // Type breakdown bars
@@ -1686,6 +1705,8 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +(a.target_pass===true?'<span class="ip-chip score">target ✓</span>':a.target_pass===false?'<span class="ip-chip bad">target ✗</span>':'')
         +(a.target_ms!=null?'<span class="ip-chip">'+(a.target_pass===false?'<s>':'')+a.target_ms+'ms tgt'+(a.target_pass===false?'</s>':'')+'</span>':'')
         +(a.edge_rtt!=null?'<span class="ip-chip">'+a.edge_rtt+'ms edge</span>':'')
+        +(a.rotating?'<span class="ip-chip warn">rotating</span>':'')
+        +(a.ssl_inspected?'<span class="ip-chip bad">SSL inspect</span>':'')
         +(a.target_px?'<span class="ip-chip bad">PX challenge</span>':'')
         +(a.ip_info&&a.ip_info.mobile?'<span class="ip-chip score">mobile</span>':'')
         +(a.ip_info&&a.ip_info.hosting?'<span class="ip-chip bad">hosting</span>':'')
@@ -2095,24 +2116,68 @@ function exportJob(){
   downloadTextFile('proxy-job-export-'+provider+'.txt',list);
 }
 function downloadJobDebug(){ if(activeJobId) window.open(API+'/api/jobs/'+activeJobId+'/debug-prompt','_blank'); }
+function getEliteParams(){
+  return {
+    min_score:   document.getElementById('eliteMinScore').value||'60',
+    max_ms:      document.getElementById('eliteMaxMs').value||'800',
+    max_per_asn: document.getElementById('eliteMaxAsn').value||'5',
+    max_per_city:document.getElementById('eliteMaxCity').value||'3',
+    exclude_dc:  document.getElementById('eliteExcludeDC').checked,
+    exclude_px:  document.getElementById('eliteExcludePX').checked,
+    dedupe_ip:   document.getElementById('eliteDedupeIP').checked,
+    exclude_ssl: document.getElementById('eliteExcludeSSL').checked,
+    exclude_rot: document.getElementById('eliteExcludeRotating').checked,
+  };
+}
+function setEliteParams(p){
+  document.getElementById('eliteMinScore').value   = p.min_score||'60';
+  document.getElementById('eliteMaxMs').value      = p.max_ms||'800';
+  document.getElementById('eliteMaxAsn').value     = p.max_per_asn||'5';
+  document.getElementById('eliteMaxCity').value    = p.max_per_city||'3';
+  document.getElementById('eliteExcludeDC').checked= p.exclude_dc!==false;
+  document.getElementById('eliteExcludePX').checked= p.exclude_px!==false;
+  document.getElementById('eliteDedupeIP').checked = p.dedupe_ip!==false;
+  document.getElementById('eliteExcludeSSL').checked     = !!p.exclude_ssl;
+  document.getElementById('eliteExcludeRotating').checked= !!p.exclude_rot;
+}
+function getElitePresets(){ try{return JSON.parse(localStorage.getItem('elitePresets')||'{}');}catch{return{};} }
+function renderElitePresets(){
+  var sel=document.getElementById('elitePreset'); if(!sel)return;
+  var presets=getElitePresets(), names=Object.keys(presets);
+  sel.innerHTML='<option value="">— Presets —</option>'
+    +names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('');
+}
+async function saveElitePreset(){
+  var name=await appPrompt('Preset name:','');
+  if(!name||!name.trim())return;
+  var presets=getElitePresets();
+  presets[name.trim()]=getEliteParams();
+  localStorage.setItem('elitePresets',JSON.stringify(presets));
+  renderElitePresets();
+  toast('Preset "'+name.trim()+'" saved');
+}
+function loadElitePreset(){
+  var sel=document.getElementById('elitePreset');
+  var name=sel.value; if(!name)return;
+  var presets=getElitePresets();
+  if(presets[name]) setEliteParams(presets[name]);
+}
 async function eliteCopy(){
   if(!activeJobId){toast('No active job.',true);return;}
-  var minScore  = document.getElementById('eliteMinScore').value||'60';
-  var maxMs     = document.getElementById('eliteMaxMs').value||'800';
-  var maxAsn    = document.getElementById('eliteMaxAsn').value||'5';
-  var maxCity   = document.getElementById('eliteMaxCity').value||'3';
-  var exDC      = document.getElementById('eliteExcludeDC').checked?'true':'false';
-  var exPX      = document.getElementById('eliteExcludePX').checked?'true':'false';
-  var dedupeIP  = document.getElementById('eliteDedupeIP').checked?'true':'false';
+  var p=getEliteParams();
   var url=API+'/api/jobs/'+activeJobId+'/elite'
-    +'?min_score='+minScore+'&max_ms='+maxMs
-    +'&exclude_dc='+exDC+'&exclude_px='+exPX+'&dedupe_ip='+dedupeIP
-    +'&max_per_asn='+maxAsn+'&max_per_city='+maxCity;
+    +'?min_score='+p.min_score+'&max_ms='+p.max_ms
+    +'&exclude_dc='+(p.exclude_dc?'true':'false')
+    +'&exclude_px='+(p.exclude_px?'true':'false')
+    +'&dedupe_ip=' +(p.dedupe_ip ?'true':'false')
+    +'&exclude_ssl='+(p.exclude_ssl?'true':'false')
+    +'&exclude_rotating='+(p.exclude_rot?'true':'false')
+    +'&max_per_asn='+p.max_per_asn+'&max_per_city='+p.max_per_city;
   try{
     var r=await fetch(url);
     var text=(await r.text()).trim();
     var lines=text?text.split('\n').filter(function(l){return l.trim();}):[];
-    document.getElementById('eliteCopyCount').textContent=lines.length?lines.length.toLocaleString()+' proxies copied':'0 proxies matched filters';
+    document.getElementById('eliteCopyCount').textContent=lines.length?lines.length.toLocaleString()+' proxies copied':'0 matched';
     if(!lines.length){toast('No proxies matched elite filters.',true);return;}
     await navigator.clipboard.writeText(text);
     toast('Copied '+lines.length.toLocaleString()+' elite proxies');
@@ -3063,13 +3128,31 @@ async function fetchFromApi(){
 // (Functions renameSess, renamePv, renameSessionGroup, createSessionGroup,
 //  deleteIntegration are defined below with appPrompt already)
 
+// ── Auto-update check ──────────────────────────────────────────────────────
+async function checkForUpdate(){
+  try{
+    var r=await fetch('https://api.github.com/repos/treys5/proxykit/releases/latest',{cache:'no-store'});
+    if(!r.ok) return;
+    var d=await r.json();
+    var latest=(d.tag_name||'').replace(/^v/,'');
+    var current='1.08';
+    if(latest&&latest!==current&&latest>current){
+      document.getElementById('updateBannerText').textContent='v'+latest+' is available (you have v'+current+')';
+      document.getElementById('updateBannerLink').href=d.html_url||'https://github.com/treys5/proxykit/releases/latest';
+      document.getElementById('updateBanner').style.display='flex';
+    }
+  }catch(e){}
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 updateSavedTab();
 startPolling();
 loadSessionGroups();
-intTypeChanged(); // init integration extra fields
+intTypeChanged();
 renderIntegrationList();
-dbgLog('Proxy Tester v1.07 started');
+renderElitePresets();
+checkForUpdate();
+dbgLog('Proxy Tester v1.08 started');
 </script>
 </body>
 </html>
