@@ -43,31 +43,30 @@ if ($CanLaunchElectron -and (-not (Test-Path $ElectronExe))) {
     Write-Host "  First-time setup -- downloading Electron runtime (~80 MB)..." -ForegroundColor Yellow
     Write-Host ""
 
-    $StdoutLog = [System.IO.Path]::GetTempFileName()
-    $StderrLog = [System.IO.Path]::GetTempFileName()
-
-    # Start-Process cannot launch .cmd/.bat directly -- route through cmd.exe
-    if ($NpmExe -match '\.(cmd|bat)$') {
-        $ProcExe  = "$env:SystemRoot\System32\cmd.exe"
-        $ProcArgs = @("/c", $NpmExe, "install", "--prefer-offline", "--no-progress")
-    } else {
-        $ProcExe  = $NpmExe
-        $ProcArgs = @("install", "--prefer-offline", "--no-progress")
-    }
-
-    Push-Location $AppDir
-    $Proc = Start-Process -FilePath $ProcExe `
-        -ArgumentList $ProcArgs `
-        -WorkingDirectory $AppDir -PassThru -NoNewWindow `
-        -RedirectStandardOutput $StdoutLog -RedirectStandardError $StderrLog
-    Pop-Location
+    # Use a background PowerShell job -- avoids Start-Process Win32 restrictions
+    # on Windows Server where .cmd files and redirect flags cause errors.
+    $StartTime = [DateTime]::Now
+    $Job = Start-Job -ScriptBlock {
+        param($npmExe, $workDir)
+        Set-Location $workDir
+        try {
+            if ($npmExe -match '\.(cmd|bat)$') {
+                & cmd.exe /c "`"$npmExe`" install --prefer-offline --no-progress" 2>&1
+            } else {
+                & $npmExe install --prefer-offline --no-progress 2>&1
+            }
+            exit $LASTEXITCODE
+        } catch {
+            Write-Output "ERROR: $_"
+            exit 1
+        }
+    } -ArgumentList $NpmExe, $AppDir
 
     $Spinner = @('|', '/', '-', '\')
     $SpinIdx = 0
-    $StartTime = [DateTime]::Now
-    $EstSecs = 50
+    $EstSecs = 90
 
-    while (-not $Proc.HasExited) {
+    while ($Job.State -eq 'Running') {
         $Elapsed   = [int]([DateTime]::Now - $StartTime).TotalSeconds
         $Remaining = [Math]::Max(0, $EstSecs - $Elapsed)
         $Spin      = $Spinner[$SpinIdx % 4]
@@ -79,25 +78,21 @@ if ($CanLaunchElectron -and (-not (Test-Path $ElectronExe))) {
     }
 
     $TotalSecs = [int]([DateTime]::Now - $StartTime).TotalSeconds
+    $JobOutput = Receive-Job -Job $Job
+    $ExitOk    = $Job.State -eq 'Completed'
+    Remove-Job -Job $Job -Force
 
-    if ($Proc.ExitCode -ne 0) {
+    if (-not $ExitOk) {
         Write-Host "`r  [FAIL] Setup failed after ${TotalSecs}s.                                    " -ForegroundColor Red
         Write-Host ""
         Write-Host "  Error output:" -ForegroundColor Red
-        if (Test-Path $StderrLog) {
-            Get-Content $StderrLog | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkRed }
-        }
-        if (Test-Path $StdoutLog) {
-            Get-Content $StdoutLog | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-        }
-        Remove-Item $StdoutLog, $StderrLog -ErrorAction SilentlyContinue
+        $JobOutput | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkRed }
         pause
         exit 1
     }
 
     Write-Host "`r  [OK]  Setup complete in ${TotalSecs}s.                                       " -ForegroundColor Green
     Write-Host ""
-    Remove-Item $StdoutLog, $StderrLog -ErrorAction SilentlyContinue
 }
 
 # Launch
