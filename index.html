@@ -289,7 +289,8 @@ select:focus{border-color:var(--accent);}
 .ip-cred-cell{flex:1;min-width:280px;}
 .ip-cred-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
 .ip-cred{font-family:var(--mono);color:var(--text);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.ip-cred-meta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;color:var(--muted);font-size:10px;}
+.ip-cred-meta{display:none;align-items:center;gap:5px;flex-wrap:wrap;color:var(--muted);font-size:10px;margin-top:3px;}
+.ip-cred-row:hover .ip-cred-meta{display:flex;}
 .ip-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:999px;
   border:1px solid rgba(120,150,185,.2);background:rgba(255,255,255,.03);font-family:var(--sans);font-size:10px;}
 .ip-chip.score{color:var(--accent);border-color:rgba(129,140,248,.28);}
@@ -436,7 +437,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.08</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -716,22 +717,25 @@ body.light-mode .ip-group{background:#ffffff;}
       <div class="stat"><div class="stat-v r" id="rFailed">—</div><div class="stat-l">FAILED</div></div>
       <div class="stat"><div class="stat-v" id="rRate">—</div><div class="stat-l">PASS RATE</div></div>
       <div class="stat"><div class="stat-v" id="rDataUsed" style="font-size:13px">—</div><div class="stat-l">DATA USED</div></div>
-      <div class="stat"><div class="stat-v" id="rPxHits" style="font-size:13px">—</div><div class="stat-l">PX HITS</div></div>
+      <div class="stat"><div class="stat-v" id="rPxPct" style="color:var(--fail)">—</div><div class="stat-l">PX DETECT %</div></div>
       <div class="stat"><div class="stat-v" id="rHttpbinPass" style="font-size:13px">—</div><div class="stat-l">HTTPBIN</div></div>
       <div class="stat" id="rTargetStat" style="display:none"><div class="stat-v" id="rTargetPass" style="font-size:13px">—</div><div class="stat-l">TARGET PASS</div></div>
     </div>
-    <!-- Single run IP analysis -->
-    <div id="jobAnalysisPanel" style="display:none">
-      <div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:10px;font-weight:700;letter-spacing:.15em;color:var(--accent);">⬡ IP POOL ANALYSIS</div>
+    <!-- Single run IP analysis (collapsible) -->
+    <details id="jobAnalysisPanel" style="display:none" class="sess-detail-section">
+      <summary>⬡ IP POOL ANALYSIS</summary>
       <div id="jobAnalysisContent"></div>
-    </div>
-    <div class="provider-strip-wrap">
-      <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',-1)">‹</button>
-      <div id="jobProviderTabs" class="provider-strip"></div>
-      <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',1)">›</button>
-    </div>
-    <div id="jobProviderSummary" class="provider-summary"></div>
-    <div id="jobSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+    </details>
+    <details class="sess-detail-section" id="jobProviderDetails">
+      <summary>⬡ ISP BREAKDOWN &amp; ANALYSIS</summary>
+      <div class="provider-strip-wrap">
+        <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',-1)">‹</button>
+        <div id="jobProviderTabs" class="provider-strip"></div>
+        <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',1)">›</button>
+      </div>
+      <div id="jobProviderSummary" class="provider-summary"></div>
+      <div id="jobSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+    </details>
     <div class="tbl-wrap" style="max-height:640px;">
       <div id="resBody"></div>
       <div id="resEmpty" class="empty" style="display:none">No results yet.</div>
@@ -1716,7 +1720,7 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +'</div>';
     }).join('');
 
-    return '<div class="ip-group open" id="ig'+gi+'"><div>'+hdr+'</div>'
+    return '<div class="ip-group" id="ig'+gi+'"><div>'+hdr+'</div>'
       +'<div class="ip-group-body">'+rows+'</div></div>';
   }).join('')+'</div>';
 }
@@ -2068,8 +2072,11 @@ async function loadJobResults(jobId){
   if(s.data_usage){
     document.getElementById('rDataUsed').textContent=formatBytes(s.data_usage.total_bytes);
     var pxCnt=s.data_usage.px_challenge_count||0;
-    document.getElementById('rPxHits').textContent=pxCnt>0?pxCnt+' ('+s.data_usage.px_challenge_pct+'%)':'0';
-    document.getElementById('rPxHits').style.color=pxCnt>0?'var(--warn)':'';
+    var pxPct=s.data_usage.px_challenge_pct||0;
+    var pxEl=document.getElementById('rPxPct');
+    pxEl.textContent=pxPct+'%';
+    pxEl.style.color=pxPct>=30?'var(--fail)':pxPct>=10?'var(--warn)':pxPct>0?'var(--gold)':'var(--accent)';
+    pxEl.title=pxCnt+' PX challenge'+(pxCnt!==1?'s':'')+' detected';
     var hbPct=s.data_usage.httpbin_pass_pct;
     document.getElementById('rHttpbinPass').textContent=hbPct!=null?hbPct+'%':'—';
     document.getElementById('rHttpbinPass').style.color=hbPct>=80?'var(--accent)':hbPct>=50?'var(--warn)':'var(--fail)';
@@ -2083,7 +2090,7 @@ async function loadJobResults(jobId){
     }
   }else{
     document.getElementById('rDataUsed').textContent='—';
-    document.getElementById('rPxHits').textContent='—';
+    document.getElementById('rPxPct').textContent='—';
     document.getElementById('rHttpbinPass').textContent='—';
     document.getElementById('rTargetStat').style.display='none';
   }

@@ -9,7 +9,7 @@ const path = require('path');
 const url  = require('url');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.08';
+const APP_VERSION = '1.09';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -690,6 +690,20 @@ async function runJob(jobId, proxies, config) {
 
   job.top_proxies = passed.slice(0, config.top_n);
   job.status = 'done'; job.progress_pct = 100; job.eta_sec = 0;
+
+  // Persist calibration data so estimates survive app restarts
+  if (job.data_usage && job.data_usage.avg_bytes_per_proxy > 0) {
+    try {
+      var calFile = path.join(DATA_DIR, 'calibration.json');
+      var calData = [];
+      try { calData = JSON.parse(fs.readFileSync(calFile, 'utf8')); } catch(e) {}
+      if (!Array.isArray(calData)) calData = [];
+      calData.push({ date: new Date().toISOString(), avg_bytes_per_proxy: job.data_usage.avg_bytes_per_proxy, proxy_count: completed });
+      calData = calData.slice(-20); // keep last 20 runs
+      fs.writeFileSync(calFile, JSON.stringify(calData));
+    } catch(e) {}
+  }
+
   if (job.session_id && sessions[job.session_id]) mergeRunIntoSession(job.session_id, jobId, results);
   fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
   fs.writeFileSync(path.join(__dirname,'results',jobId+'.json'),
@@ -1270,18 +1284,27 @@ const server = http.createServer(async function(req,res){
     return;
   }
 
-  // Data usage estimator — calibrated from recent completed jobs
+  // Data usage estimator — calibrated from recent jobs + persisted history
   if(pathname==='/api/estimate'&&method==='GET'){
     var estN=parseInt(parsed.query.proxies||'1000');
     if(isNaN(estN)||estN<1) estN=1000;
-    var recentJobs=Object.values(jobs)
+    // Collect in-memory jobs
+    var memSamples=Object.values(jobs)
       .filter(function(j){return j.status==='done'&&j.data_usage&&j.data_usage.avg_bytes_per_proxy>0;})
       .sort(function(a,b){return (b.startTime||0)-(a.startTime||0);})
-      .slice(0,5);
-    if(!recentJobs.length) return jsonRes(res,{error:'No completed tests yet — run at least one test to calibrate the estimate.'},400);
-    var avgBytesPerProxy=Math.round(
-      recentJobs.reduce(function(s,j){return s+j.data_usage.avg_bytes_per_proxy;},0)/recentJobs.length
-    );
+      .slice(0,5)
+      .map(function(j){return j.data_usage.avg_bytes_per_proxy;});
+    // Load persisted calibration file
+    var diskSamples=[];
+    try{
+      var calRaw=fs.readFileSync(path.join(DATA_DIR,'calibration.json'),'utf8');
+      var calArr=JSON.parse(calRaw);
+      if(Array.isArray(calArr)) diskSamples=calArr.slice(-10).map(function(e){return e.avg_bytes_per_proxy;}).filter(Number);
+    }catch(e){}
+    // Prefer in-memory (most recent); fall back to disk if none in memory
+    var samples=memSamples.length?memSamples:diskSamples;
+    if(!samples.length) return jsonRes(res,{error:'No test history yet — run at least one test to calibrate.'},400);
+    var avgBytesPerProxy=Math.round(samples.reduce(function(a,b){return a+b;},0)/samples.length);
     var estimatedBytes=avgBytesPerProxy*estN;
     return jsonRes(res,{
       proxy_count:          estN,
@@ -1289,7 +1312,8 @@ const server = http.createServer(async function(req,res){
       estimated_bytes:      estimatedBytes,
       estimated_kb:         Math.round(estimatedBytes/1024),
       estimated_mb:         Math.round(estimatedBytes/1024/1024*100)/100,
-      calibrated_from:      recentJobs.length,
+      calibrated_from:      samples.length,
+      source:               memSamples.length?'live':'history',
     });
   }
 
