@@ -407,6 +407,42 @@ body.light-mode .ip-group{background:#ffffff;}
 .ai-spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(129,140,248,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .ai-provider-badge{font-size:9px;padding:2px 7px;border-radius:999px;background:rgba(129,140,248,.12);color:var(--accent);border:1px solid rgba(129,140,248,.25);font-weight:700;letter-spacing:.05em;}
+/* ── Results page rework ── */
+.res-overview{display:grid;grid-template-columns:200px 1fr;gap:0;border-bottom:1px solid var(--border);}
+.res-score-col{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 16px;border-right:1px solid var(--border);gap:6px;}
+.res-big-score{font-size:52px;font-weight:900;font-family:var(--mono);line-height:1;}
+.res-score-lbl{font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--muted);}
+.res-score-grade{font-size:11px;font-weight:700;letter-spacing:.08em;margin-top:2px;}
+.res-ai-btn{margin-top:12px;width:100%;padding:7px 0;font-size:10px;font-weight:800;letter-spacing:.1em;background:rgba(129,140,248,.12);color:var(--accent);border:1px solid rgba(129,140,248,.35);border-radius:var(--r-xs);cursor:pointer;transition:background .15s;}
+.res-ai-btn:hover{background:rgba(129,140,248,.22);}
+.res-ai-btn:disabled{opacity:.5;cursor:default;}
+.res-kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:0;}
+.res-kpi{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.res-kpi:nth-child(3n){border-right:none;}
+.res-kpi-v{font-size:20px;font-weight:800;font-family:var(--mono);}
+.res-kpi-l{font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);margin-top:2px;}
+.res-detail-col{display:flex;flex-direction:column;}
+.res-alerts{padding:10px 16px;display:flex;flex-direction:column;gap:5px;}
+.res-type-bars{padding:10px 16px 14px;border-top:1px solid var(--border);}
+.res-type-bars-title{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted);margin-bottom:8px;}
+.res-lat-chart{display:flex;align-items:flex-end;gap:3px;height:36px;}
+.res-lat-bar{flex:1;background:rgba(129,140,248,.35);border-radius:2px 2px 0 0;min-height:3px;position:relative;}
+.res-lat-bar:hover{background:rgba(129,140,248,.65);}
+.res-lat-lbl{font-size:8px;color:var(--muted);text-align:center;margin-top:3px;}
+/* PX section */
+.px-section{border-top:2px solid rgba(239,83,80,.35);background:rgba(239,83,80,.03);}
+.px-section-hdr{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid rgba(239,83,80,.2);}
+.px-section-title{font-size:10px;font-weight:800;letter-spacing:.12em;color:#ef5350;}
+.px-big{font-size:44px;font-weight:900;font-family:var(--mono);}
+.px-grid{display:grid;grid-template-columns:160px 1fr;gap:0;}
+.px-score-col{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;border-right:1px solid rgba(239,83,80,.2);gap:4px;}
+.px-detail-col{padding:12px 16px;}
+.px-isp-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.px-isp-name{font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.px-isp-bar-track{flex:0 0 120px;height:5px;background:rgba(255,255,255,.08);border-radius:2px;}
+.px-isp-bar-fill{height:100%;border-radius:2px;background:#ef5350;}
+.px-isp-val{font-size:10px;font-family:var(--mono);color:var(--muted);width:40px;text-align:right;}
+.px-safe-badge{font-size:10px;padding:3px 9px;border-radius:999px;font-weight:700;letter-spacing:.05em;}
 /* ── Config test toggles ── */
 .test-toggle-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(36,46,66,.5);}
 .test-toggle-row:last-child{border-bottom:none;}
@@ -454,7 +490,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.3</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.4</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -769,43 +805,55 @@ body.light-mode .ip-group{background:#ffffff;}
     <div class="ph">⬡ RESULTS — <span id="resName"></span>
       <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="resMeta"></span>
     </div>
-    <div class="stats-row" id="rStatsRow" style="grid-template-columns:repeat(7,1fr)">
-      <div class="stat"><div class="stat-v" id="rTotal">—</div><div class="stat-l">TESTED</div></div>
-      <div class="stat"><div class="stat-v g" id="rPassed">—</div><div class="stat-l">PASSED</div></div>
-      <div class="stat"><div class="stat-v r" id="rFailed">—</div><div class="stat-l">FAILED</div></div>
-      <div class="stat"><div class="stat-v" id="rRate">—</div><div class="stat-l">PASS RATE</div></div>
-      <div class="stat"><div class="stat-v" id="rDataUsed" style="font-size:13px">—</div><div class="stat-l">DATA USED</div></div>
-      <div class="stat"><div class="stat-v" id="rPxPct" style="color:var(--fail)">—</div><div class="stat-l">PX DETECT %</div></div>
-      <div class="stat"><div class="stat-v" id="rHttpbinPass" style="font-size:13px">—</div><div class="stat-l">HTTPBIN</div></div>
-      <div class="stat" id="rTargetStat" style="display:none"><div class="stat-v" id="rTargetPass" style="font-size:13px">—</div><div class="stat-l">TARGET PASS</div></div>
-    </div>
-    <!-- Single run IP analysis (collapsible) -->
-    <details id="jobAnalysisPanel" style="display:none" class="sess-detail-section">
-      <summary>⬡ IP POOL ANALYSIS</summary>
-      <div id="jobAnalysisContent"></div>
-    </details>
-    <details class="sess-detail-section" id="jobProviderDetails">
-      <summary>⬡ ISP BREAKDOWN &amp; ANALYSIS</summary>
-      <div class="provider-strip-wrap">
-        <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',-1)">‹</button>
-        <div id="jobProviderTabs" class="provider-strip"></div>
-        <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',1)">›</button>
+
+    <!-- ── SECTION 1: POOL OVERVIEW ────────────────────────────────────────── -->
+    <div class="res-overview" id="overviewSection">
+      <!-- Left: Score + AI button -->
+      <div class="res-score-col">
+        <div class="res-score-lbl">POOL SCORE</div>
+        <div class="res-big-score" id="ovScore" style="color:var(--muted)">—</div>
+        <div class="res-score-grade" id="ovGrade" style="color:var(--muted)">ANALYZING</div>
+        <button class="res-ai-btn" id="aiAnalyzeBtn" onclick="askAI()">🤖 ASK AI</button>
+        <!-- hidden stat holders kept for backward compat -->
+        <span id="rTotal" style="display:none">—</span>
+        <span id="rPassed" style="display:none">—</span>
+        <span id="rFailed" style="display:none">—</span>
+        <span id="rRate" style="display:none">—</span>
+        <span id="rDataUsed" style="display:none">—</span>
+        <span id="rPxPct" style="display:none">—</span>
+        <span id="rHttpbinPass" style="display:none">—</span>
+        <span id="rTargetStat" style="display:none"></span>
+        <span id="rTargetPass" style="display:none">—</span>
+        <span id="rStatsRow" style="display:none"></span>
       </div>
-      <div id="jobProviderSummary" class="provider-summary"></div>
-      <div id="jobSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
-    </details>
-    <div class="tbl-wrap" style="max-height:640px;">
-      <div id="resBody"></div>
-      <div id="resEmpty" class="empty" style="display:none">No results yet.</div>
+      <!-- Right: KPIs + type bars + latency chart -->
+      <div class="res-detail-col">
+        <div class="res-kpi-grid" id="ovKpiGrid">
+          <div class="res-kpi"><div class="res-kpi-v" id="ovPassRate">—</div><div class="res-kpi-l">PASS RATE</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="ovAvgSpeed">—</div><div class="res-kpi-l">AVG SPEED</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="ovUniqueIPs">—</div><div class="res-kpi-l">UNIQUE IPs</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="ovDiversity">—</div><div class="res-kpi-l">DIVERSITY</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="ovDataUsed">—</div><div class="res-kpi-l">DATA USED</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="ovHttpbin">—</div><div class="res-kpi-l">CONNECTIVITY</div></div>
+        </div>
+        <div class="res-alerts" id="ovAlerts"></div>
+        <div class="res-type-bars" id="ovTypeBars" style="display:none">
+          <div class="res-type-bars-title">IP TYPE BREAKDOWN</div>
+          <div id="ovTypeBarsInner"></div>
+          <div style="margin-top:10px;">
+            <div class="res-type-bars-title" style="margin-bottom:6px">LATENCY DISTRIBUTION</div>
+            <div style="display:flex;gap:6px;align-items:flex-end;">
+              <div style="flex:1;">
+                <div class="res-lat-chart" id="ovLatChart"></div>
+                <div style="display:flex;gap:3px;"><div id="ovLatLabels" style="display:flex;gap:3px;width:100%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="export-bar">
-      <span class="export-lbl" id="resExportLbl"></span>
-      <button class="btn btn-out btn-sm" id="resCopyBtn" onclick="copyJob()">⎘ COPY TOP 1000</button>
-      <button class="btn btn-out btn-sm" onclick="exportJob()">⬇ TXT</button>
-      <button class="btn btn-out btn-sm" id="aiAnalyzeBtn" onclick="askAI()" style="display:none;border-color:rgba(129,140,248,.5);color:var(--accent)">🤖 ASK AI</button>
-      <button class="btn btn-out btn-sm" onclick="downloadJobDebug()">AI DEBUG</button>
-    </div>
-    <!-- AI response panel -->
+
+    <!-- AI response panel (right below overview) -->
     <div id="aiResponsePanel" class="ai-panel" style="display:none">
       <div class="ai-panel-hdr">
         <span id="aiResponseIcon">🤖</span>
@@ -816,31 +864,87 @@ body.light-mode .ip-group{background:#ffffff;}
       </div>
       <div class="ai-panel-body" id="aiResponseBody">Analyzing your results...</div>
     </div>
-    <!-- Elite filter pipeline -->
-    <div style="border-top:1px solid var(--border);padding:12px 16px;background:rgba(0,0,0,.15);">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--accent);margin-bottom:10px;">⬡ ELITE FILTER PIPELINE</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
-        <div><label style="font-size:10px;margin-bottom:3px">MIN SCORE</label><input type="number" id="eliteMinScore" value="60" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
-        <div><label style="font-size:10px;margin-bottom:3px">MAX LATENCY (ms)</label><input type="number" id="eliteMaxMs" value="800" min="100" max="5000" style="margin:0;padding:4px 8px;font-size:12px"></div>
-        <div><label style="font-size:10px;margin-bottom:3px">MAX PER ASN</label><input type="number" id="eliteMaxAsn" value="5" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
-        <div><label style="font-size:10px;margin-bottom:3px">MAX PER CITY</label><input type="number" id="eliteMaxCity" value="3" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+
+    <!-- ── SECTION 2: PX RISK ANALYSIS ─────────────────────────────────────── -->
+    <div class="px-section" id="pxSection" style="display:none">
+      <div class="px-section-hdr">
+        <span class="px-section-title">PX RISK ANALYSIS</span>
+        <span id="pxSectionSub" style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px"></span>
       </div>
-      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeDC" checked> Exclude datacenter</label>
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludePX" checked> Exclude PX hits</label>
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteDedupeIP" checked> Dedupe by egress IP</label>
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeSSL"> Exclude SSL inspect</label>
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeRotating"> Exclude rotating</label>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
-        <select id="elitePreset" onchange="loadElitePreset()" style="font-size:11px;padding:4px 8px;margin:0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--r-xs);">
-          <option value="">— Presets —</option>
-        </select>
-        <button class="btn btn-out btn-sm" onclick="saveElitePreset()">SAVE PRESET</button>
-        <button class="btn btn-sm" style="margin-left:auto;padding:5px 18px" onclick="eliteCopy()">⬡ ELITE COPY</button>
-        <span id="eliteCopyCount" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+      <div class="px-grid" id="pxContent">
+        <div class="px-score-col">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">PX DETECT RATE</div>
+          <div class="px-big" id="pxBigPct" style="color:#ef5350">—</div>
+          <div id="pxRiskLabel" style="font-size:10px;font-weight:700;letter-spacing:.08em;margin-top:2px"></div>
+          <div id="pxSafeBadge" style="margin-top:8px"></div>
+        </div>
+        <div class="px-detail-col">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PX HIT RATE BY ISP</div>
+          <div id="pxIspList"></div>
+          <div id="pxInterpret" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;border-top:1px solid rgba(255,255,255,.05);padding-top:10px"></div>
+        </div>
       </div>
     </div>
+
+    <!-- ── SECTION 3: ADVANCED DETAILS (collapsed) ─────────────────────────── -->
+    <details class="sess-detail-section" id="advancedSection">
+      <summary>⬡ ADVANCED — ISP BREAKDOWN, PROXY LIST &amp; EXPORT</summary>
+
+      <!-- IP Pool analysis (hidden backing element for renderAnalysis compat) -->
+      <div id="jobAnalysisPanel" style="display:none"><div id="jobAnalysisContent"></div></div>
+
+      <!-- ISP breakdown -->
+      <details class="sess-detail-section" id="jobProviderDetails" open>
+        <summary>⬡ ISP BREAKDOWN &amp; ANALYSIS</summary>
+        <div class="provider-strip-wrap">
+          <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',-1)">‹</button>
+          <div id="jobProviderTabs" class="provider-strip"></div>
+          <button class="provider-nav" type="button" onclick="scrollProviderTabs('jobProviderTabs',1)">›</button>
+        </div>
+        <div id="jobProviderSummary" class="provider-summary"></div>
+        <div id="jobSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+      </details>
+
+      <!-- Proxy list -->
+      <div class="tbl-wrap" style="max-height:640px;">
+        <div id="resBody"></div>
+        <div id="resEmpty" class="empty" style="display:none">No results yet.</div>
+      </div>
+
+      <!-- Export bar -->
+      <div class="export-bar">
+        <span class="export-lbl" id="resExportLbl"></span>
+        <button class="btn btn-out btn-sm" id="resCopyBtn" onclick="copyJob()">⎘ COPY TOP 1000</button>
+        <button class="btn btn-out btn-sm" onclick="exportJob()">⬇ TXT</button>
+        <button class="btn btn-out btn-sm" onclick="downloadJobDebug()">AI DEBUG</button>
+      </div>
+
+      <!-- Elite filter pipeline -->
+      <div style="border-top:1px solid var(--border);padding:12px 16px;background:rgba(0,0,0,.15);">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--accent);margin-bottom:10px;">⬡ ELITE FILTER PIPELINE</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;">
+          <div><label style="font-size:10px;margin-bottom:3px">MIN SCORE</label><input type="number" id="eliteMinScore" value="60" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+          <div><label style="font-size:10px;margin-bottom:3px">MAX LATENCY (ms)</label><input type="number" id="eliteMaxMs" value="800" min="100" max="5000" style="margin:0;padding:4px 8px;font-size:12px"></div>
+          <div><label style="font-size:10px;margin-bottom:3px">MAX PER ASN</label><input type="number" id="eliteMaxAsn" value="5" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+          <div><label style="font-size:10px;margin-bottom:3px">MAX PER CITY</label><input type="number" id="eliteMaxCity" value="3" min="0" max="100" style="margin:0;padding:4px 8px;font-size:12px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeDC" checked> Exclude datacenter</label>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludePX" checked> Exclude PX hits</label>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteDedupeIP" checked> Dedupe by egress IP</label>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeSSL"> Exclude SSL inspect</label>
+          <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:11px;cursor:pointer"><input type="checkbox" id="eliteExcludeRotating"> Exclude rotating</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;">
+          <select id="elitePreset" onchange="loadElitePreset()" style="font-size:11px;padding:4px 8px;margin:0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--r-xs);">
+            <option value="">— Presets —</option>
+          </select>
+          <button class="btn btn-out btn-sm" onclick="saveElitePreset()">SAVE PRESET</button>
+          <button class="btn btn-sm" style="margin-left:auto;padding:5px 18px" onclick="eliteCopy()">⬡ ELITE COPY</button>
+          <span id="eliteCopyCount" style="font-size:11px;color:var(--muted);font-family:var(--mono)"></span>
+        </div>
+      </div>
+    </details>
   </div>
 
 </div>
@@ -2167,39 +2271,177 @@ async function loadJobResults(jobId){
   _jobProviderFilter='all';
   document.getElementById('resPanel').style.display='block';
   document.getElementById('resName').textContent=s.list_name||jobId;
-  document.getElementById('resMeta').textContent=s.config.test_url;
-  document.getElementById('rTotal').textContent=s.total.toLocaleString();
-  document.getElementById('rPassed').textContent=s.passed.toLocaleString();
-  document.getElementById('rFailed').textContent=s.failed.toLocaleString();
-  document.getElementById('rRate').textContent=s.total>0?((s.passed/s.total)*100).toFixed(1)+'%':'—';
-  if(s.data_usage){
-    document.getElementById('rDataUsed').textContent=formatBytes(s.data_usage.total_bytes);
-    var pxCnt=s.data_usage.px_challenge_count||0;
-    var pxPct=s.data_usage.px_challenge_pct||0;
-    var pxEl=document.getElementById('rPxPct');
-    pxEl.textContent=pxPct+'%';
-    pxEl.style.color=pxPct>=30?'var(--fail)':pxPct>=10?'var(--warn)':pxPct>0?'var(--gold)':'var(--accent)';
-    pxEl.title=pxCnt+' PX challenge'+(pxCnt!==1?'s':'')+' detected';
-    var hbPct=s.data_usage.httpbin_pass_pct;
-    document.getElementById('rHttpbinPass').textContent=hbPct!=null?hbPct+'%':'—';
-    document.getElementById('rHttpbinPass').style.color=hbPct>=80?'var(--accent)':hbPct>=50?'var(--warn)':'var(--fail)';
-    var hasTarget=s.data_usage.target_tested>0;
-    document.getElementById('rTargetStat').style.display=hasTarget?'':'none';
-    document.getElementById('rStatsRow').style.gridTemplateColumns=hasTarget?'repeat(8,1fr)':'repeat(7,1fr)';
-    if(hasTarget){
-      var tPct=s.data_usage.target_pass_pct;
-      document.getElementById('rTargetPass').textContent=tPct+'%';
-      document.getElementById('rTargetPass').style.color=tPct>=80?'var(--accent)':tPct>=50?'var(--warn)':'var(--fail)';
-    }
-  }else{
-    document.getElementById('rDataUsed').textContent='—';
-    document.getElementById('rPxPct').textContent='—';
-    document.getElementById('rHttpbinPass').textContent='—';
-    document.getElementById('rTargetStat').style.display='none';
-  }
+  document.getElementById('resMeta').textContent=s.config&&s.config.test_url?s.config.test_url:'';
+  // Render overview section
+  renderJobOverview(s, r);
+  // Render PX section
+  renderJobPxSection(s, _jobResults);
+  // Existing analysis (kept for ISP tabs etc)
   if(r.ip_analysis) renderAnalysis(r.ip_analysis,'jobAnalysisPanel');
   renderJobResults();
   document.getElementById('resPanel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderJobOverview(s, r){
+  var proxies=r.proxies||[];
+  var ia=r.ip_analysis||null;
+  var du=s.data_usage||null;
+
+  // Pool score
+  var score=ia?ia.quality_score:null;
+  var scoreColor=score==null?'var(--muted)':score>=70?'var(--accent)':score>=40?'#ffcc00':'var(--fail)';
+  var scoreGrade=score==null?'NO DATA':score>=70?'GOOD POOL':score>=40?'MIXED POOL':'POOR POOL';
+  document.getElementById('ovScore').textContent=score!=null?score:'—';
+  document.getElementById('ovScore').style.color=scoreColor;
+  document.getElementById('ovGrade').textContent=scoreGrade;
+  document.getElementById('ovGrade').style.color=scoreColor;
+
+  // Pass rate
+  var passRate=s.total>0?((s.passed/s.total)*100).toFixed(1)+'%':'—';
+  var passColor=s.total>0?(s.passed/s.total>=.8?'var(--accent)':s.passed/s.total>=.5?'#ffcc00':'var(--fail)'):'var(--muted)';
+  document.getElementById('ovPassRate').textContent=passRate;
+  document.getElementById('ovPassRate').style.color=passColor;
+
+  // Avg speed from passing proxies
+  var passing=proxies.filter(function(p){return p.status==='pass'&&p.avg_ms!=null;});
+  var avgMs=passing.length?Math.round(passing.reduce(function(a,p){return a+p.avg_ms;},0)/passing.length):null;
+  var speedColor=avgMs==null?'var(--muted)':avgMs<200?'var(--accent)':avgMs<500?'#ffcc00':'var(--fail)';
+  document.getElementById('ovAvgSpeed').textContent=avgMs!=null?avgMs+'ms':'—';
+  document.getElementById('ovAvgSpeed').style.color=speedColor;
+
+  // Unique IPs
+  var uniqueIPs=ia?ia.unique_ips:null;
+  document.getElementById('ovUniqueIPs').textContent=uniqueIPs!=null?uniqueIPs.toLocaleString():'—';
+  document.getElementById('ovUniqueIPs').style.color=uniqueIPs!=null?'var(--accent)':'var(--muted)';
+
+  // Diversity (resi % from type breakdown)
+  var resiPct=ia&&ia.total_passed>0?Math.round((ia.residential_count||0)/ia.total_passed*100):null;
+  var divColor=resiPct==null?'var(--muted)':resiPct>=80?'var(--accent)':resiPct>=50?'#ffcc00':'var(--fail)';
+  document.getElementById('ovDiversity').textContent=resiPct!=null?resiPct+'% RESI':'—';
+  document.getElementById('ovDiversity').style.color=divColor;
+  document.getElementById('ovDiversity').style.fontSize=resiPct!=null?'14px':'20px';
+
+  // Data used / connectivity
+  document.getElementById('ovDataUsed').textContent=du?formatBytes(du.total_bytes):'—';
+  var hbPct=du?du.httpbin_pass_pct:null;
+  document.getElementById('ovHttpbin').textContent=hbPct!=null?hbPct+'%':'—';
+  document.getElementById('ovHttpbin').style.color=hbPct==null?'var(--muted)':hbPct>=80?'var(--accent)':hbPct>=50?'#ffcc00':'var(--fail)';
+
+  // Alerts
+  var alerts='';
+  if(ia){
+    if(ia.private_count>0) alerts+='<div class="alert-box alert-bad">'+ia.private_count+' private IP leaks (RFC1918) — provider bug</div>';
+    if(ia.datacenter_pct>10) alerts+='<div class="alert-box alert-bad">'+ia.datacenter_pct+'% datacenter IPs — will be flagged by anti-bot</div>';
+    else if(ia.datacenter_count>0) alerts+='<div class="alert-box alert-warn">'+ia.datacenter_count+' datacenter IPs detected (excluded from copy)</div>';
+    if(ia.reuse_rate_pct>30) alerts+='<div class="alert-box alert-bad">'+ia.reuse_rate_pct+'% IP reuse — pool smaller than advertised</div>';
+    else if(ia.reuse_rate_pct>10) alerts+='<div class="alert-box alert-warn">'+ia.reuse_rate_pct+'% IP reuse — some IPs shared across tests</div>';
+    if((ia.ssl_inspected_count||0)>0) alerts+='<div class="alert-box alert-bad">'+ia.ssl_inspected_count+' proxies intercepting SSL — HTTPS traffic visible to provider</div>';
+    if((ia.rotating_count||0)>0) alerts+='<div class="alert-box alert-warn">'+ia.rotating_count+' rotating proxies — egress IP changes per request</div>';
+    if((ia.crowded_subnets||[]).length>0) alerts+='<div class="alert-box alert-warn">'+ia.crowded_subnets.length+' crowded /24 subnet'+(ia.crowded_subnets.length>1?'s':'')+' — burn risk if one IP flagged</div>';
+    if(score>=70&&!alerts) alerts='<div class="alert-box alert-good">Pool looks clean — good residential diversity</div>';
+  } else {
+    alerts='<div class="alert-box alert-warn">No IP analysis available — IP detection may be off</div>';
+  }
+  document.getElementById('ovAlerts').innerHTML=alerts;
+
+  // Type breakdown bars + latency chart
+  if(ia&&ia.total_passed>0){
+    document.getElementById('ovTypeBars').style.display='';
+    var types=[
+      {k:'residential',label:'Resi',count:ia.residential_count||0},
+      {k:'mobile',label:'Mobile',count:ia.mobile_count||0},
+      {k:'unknown',label:'Unknown',count:ia.unknown_count||0},
+      {k:'flagged_proxy',label:'Flagged',count:ia.flagged_count||0},
+      {k:'datacenter',label:'DC',count:ia.datacenter_count||0},
+    ].filter(function(t){return t.count>0;});
+    document.getElementById('ovTypeBarsInner').innerHTML=types.map(function(t){
+      var pct=Math.round(t.count/ia.total_passed*100);
+      return '<div class="type-bar-row">'
+        +'<div class="type-bar-label">'+ipTypeDot(t.k)+t.label+'</div>'
+        +'<div class="type-bar-track"><div class="type-bar-fill" style="width:'+pct+'%;background:'+ipTypeColor(t.k)+'"></div></div>'
+        +'<div class="type-bar-val">'+pct+'%</div></div>';
+    }).join('');
+
+    // Latency distribution chart from actual proxy data
+    var buckets=[
+      {label:'<100',max:100,count:0},{label:'100-200',max:200,count:0},
+      {label:'200-500',max:500,count:0},{label:'500-1k',max:1000,count:0},{label:'>1k',max:Infinity,count:0}
+    ];
+    passing.forEach(function(p){
+      var ms=p.avg_ms;
+      for(var i=0;i<buckets.length;i++){if(ms<buckets[i].max){buckets[i].count++;break;}}
+    });
+    var maxBucket=Math.max.apply(null,buckets.map(function(b){return b.count;}));
+    document.getElementById('ovLatChart').innerHTML=buckets.map(function(b){
+      var h=maxBucket>0?Math.max(3,Math.round(b.count/maxBucket*34)):3;
+      var col=b.label==='<100'?'var(--accent)':b.label==='100-200'?'rgba(129,140,248,.7)':'rgba(129,140,248,.35)';
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">'
+        +'<div title="'+b.count+' proxies" style="width:100%;height:'+h+'px;background:'+col+';border-radius:2px 2px 0 0;cursor:default"></div>'
+        +'<div style="font-size:8px;color:var(--muted);margin-top:3px;white-space:nowrap">'+b.label+'</div></div>';
+    }).join('');
+  }
+}
+
+function renderJobPxSection(s, proxies){
+  var du=s.data_usage||null;
+  var hasTarget=du&&du.target_tested>0;
+  var pxSection=document.getElementById('pxSection');
+
+  if(!hasTarget){ pxSection.style.display='none'; return; }
+  pxSection.style.display='';
+
+  var pxCnt=du.px_challenge_count||0;
+  var pxPct=du.px_challenge_pct||0;
+  var tested=du.target_tested||du.httpbin_tested||s.total||1;
+
+  // Color by severity
+  var pxColor=pxPct>=30?'#ef5350':pxPct>=10?'#ff9800':pxPct>0?'#ffcc00':'var(--accent)';
+  var riskLabel=pxPct>=30?'HIGH RISK':pxPct>=10?'ELEVATED':pxPct>0?'LOW RISK':'CLEAN';
+  document.getElementById('pxBigPct').textContent=pxPct+'%';
+  document.getElementById('pxBigPct').style.color=pxColor;
+  document.getElementById('pxRiskLabel').textContent=riskLabel;
+  document.getElementById('pxRiskLabel').style.color=pxColor;
+  document.getElementById('pxSectionSub').textContent='Target URL tested — '+pxCnt+' of '+(s.total||'?')+' proxies triggered PX';
+
+  var safePct=pxPct>0?(100-pxPct):100;
+  document.getElementById('pxSafeBadge').innerHTML='<span class="px-safe-badge" style="background:rgba('+(pxPct<10?'76,175,80':'239,83,80')+',.12);color:'+(pxPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(pxPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+
+  // Per-ISP PX breakdown
+  var ispMap={};
+  proxies.forEach(function(p){
+    if(!p.ip_info) return;
+    var isp=p.ip_info.org||p.ip_info.isp||'Unknown';
+    if(!ispMap[isp]) ispMap[isp]={total:0,px:0};
+    ispMap[isp].total++;
+    if(p.target_px||p.px_challenge) ispMap[isp].px++;
+  });
+  var ispArr=Object.keys(ispMap).map(function(k){return{isp:k,total:ispMap[k].total,px:ispMap[k].px,rate:ispMap[k].total>0?ispMap[k].px/ispMap[k].total:0};});
+  ispArr.sort(function(a,b){return b.rate-a.rate||b.total-a.total;});
+  var topIsps=ispArr.filter(function(x){return x.total>=3;}).slice(0,8);
+  var maxRate=topIsps.length?topIsps[0].rate:1;
+  document.getElementById('pxIspList').innerHTML=topIsps.length?topIsps.map(function(x){
+    var pct=Math.round(x.rate*100);
+    var bw=maxRate>0?Math.round(x.rate/maxRate*100):0;
+    var col=pct>=30?'#ef5350':pct>=10?'#ff9800':pct>0?'#ffcc00':'var(--accent)';
+    return '<div class="px-isp-row">'
+      +'<div class="px-isp-name" title="'+esc(x.isp)+'">'+esc(x.isp)+'</div>'
+      +'<div class="px-isp-bar-track"><div class="px-isp-bar-fill" style="width:'+bw+'%;background:'+col+'"></div></div>'
+      +'<div class="px-isp-val" style="color:'+col+'">'+pct+'%</div>'
+      +'<div style="font-size:9px;color:var(--muted);margin-left:4px">'+x.px+'/'+x.total+'</div>'
+      +'</div>';
+  }).join(''):'<div style="font-size:11px;color:var(--muted)">Not enough data per-ISP (need 3+ proxies per ISP)</div>';
+
+  // Interpretation text
+  var interpret='';
+  if(pxPct===0) interpret='No PX challenges detected. This pool appears safe for Walmart and other PerimeterX-protected sites.';
+  else if(pxPct<10) interpret='Low PX rate. Most proxies pass Walmart. Consider culling the '+pxCnt+' flagged proxies using Elite Filter (Exclude PX hits).';
+  else if(pxPct<30) interpret='Elevated PX rate. About 1 in '+(Math.round(100/pxPct))+' proxies triggers PerimeterX. Residential quality may be mixed — check ISP breakdown above for the worst offenders.';
+  else interpret='High PX rate. This pool is largely blocked by PerimeterX. '+(topIsps.length?'The worst performing ISPs are listed above. ':'')+'Consider using a different provider or filtering aggressively.';
+  if(topIsps.length){
+    var safe=topIsps.filter(function(x){return x.rate<0.05;});
+    if(safe.length) interpret+=' Best ISPs: '+safe.slice(0,3).map(function(x){return x.isp.split(' ')[0];}).join(', ')+'.';
+  }
+  document.getElementById('pxInterpret').textContent=interpret;
 }
 
 async function copyJob(){
@@ -3253,7 +3495,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.3';
+    var current='1.09.4';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3320,7 +3562,7 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.09.3 started');
+dbgLog('Proxy Tester v1.09.4 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){
@@ -3342,10 +3584,12 @@ function aiProviderLabel(p){
 
 async function askAI(){
   if(!activeJobId){toast('No active job.',true);return;}
+  var btn=document.getElementById('aiAnalyzeBtn');
   var panel=document.getElementById('aiResponsePanel');
   var body=document.getElementById('aiResponseBody');
   var spinner=document.getElementById('aiSpinner');
   var badge=document.getElementById('aiProviderBadge');
+  if(btn){btn.disabled=true;btn.textContent='Analyzing...';}
   panel.style.display='block';
   body.textContent='Analyzing your results...';
   spinner.style.display='';
@@ -3359,12 +3603,14 @@ async function askAI(){
     });
     var d=await r.json();
     spinner.style.display='none';
+    if(btn){btn.disabled=false;btn.textContent='🤖 ASK AI';}
     if(d.error){body.textContent='⚠ '+d.error;return;}
     badge.textContent=aiProviderLabel(d.provider);
     badge.style.display='';
     body.innerHTML=formatAiResponse(d.response);
   }catch(e){
     spinner.style.display='none';
+    if(btn){btn.disabled=false;btn.textContent='🤖 ASK AI';}
     body.textContent='⚠ Request failed: '+e.message;
   }
 }
@@ -3416,15 +3662,15 @@ function updateAiCompareTracker(jobId){
   if(btn) btn.style.display=_aiJobIdForCompare.length>=2?'':'none';
 }
 
-// Hook into loadJobResults to show AI button and track job
+// Hook into loadJobResults to reset AI panel and track job for compare
 var _origLoadJobResults=loadJobResults;
 loadJobResults=async function(jobId){
-  await _origLoadJobResults(jobId);
-  var btn=document.getElementById('aiAnalyzeBtn');
-  if(btn) btn.style.display='';
   // Reset AI panel when loading new job
   var p=document.getElementById('aiResponsePanel');
   if(p) p.style.display='none';
+  var btn=document.getElementById('aiAnalyzeBtn');
+  if(btn){ btn.disabled=false; btn.textContent='🤖 ASK AI'; }
+  await _origLoadJobResults(jobId);
   updateAiCompareTracker(jobId);
 };
 

@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.3';
+const APP_VERSION = '1.09.4';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
