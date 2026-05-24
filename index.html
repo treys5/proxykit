@@ -502,7 +502,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.8</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.9</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -1222,14 +1222,14 @@ body.light-mode .ip-group{background:#ffffff;}
       <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Opt-in · Zero proxy data sent</span>
     </div>
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.7">
-      When enabled, each completed test run sends <strong style="color:var(--text)">anonymised aggregate statistics</strong>
-      (pass rates, avg speed, ISP counts, vendor detections) to a shared analytics server.
-      <strong style="color:var(--fail)">No proxy IPs, usernames, passwords, or URLs are ever transmitted.</strong>
+      After each test run, <strong style="color:var(--text)">anonymised aggregate statistics</strong>
+      (pass rates, avg speed, ISP counts, vendor detections) are sent to a shared analytics server.
+      <strong style="color:var(--fail)">No proxy IPs, usernames, passwords, or target URLs are ever transmitted.</strong>
       In return, the results page shows how your pool compares to the community average.
     </div>
     <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
       <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:13px;font-weight:600">
-        <input type="checkbox" id="analyticsOptIn" onchange="setAnalyticsOptIn(this.checked)" style="width:16px;height:16px;accent-color:var(--accent)">
+        <input type="checkbox" id="analyticsOptIn" onchange="setAnalyticsOptIn(this.checked)" style="width:16px;height:16px;accent-color:var(--accent)" checked>
         Share anonymised test statistics
       </label>
       <span id="analyticsOptInStatus" style="font-size:11px;color:var(--muted)"></span>
@@ -3891,7 +3891,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.8';
+    var current='1.09.9';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3959,7 +3959,7 @@ renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
 loadAnalyticsSettings();
-dbgLog('Proxy Tester v1.09.8 started');
+dbgLog('Proxy Tester v1.09.9 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){
@@ -4144,7 +4144,7 @@ async function loadAnalyticsSettings(){
     var st=document.getElementById('analyticsOptInStatus');
     var ci=document.getElementById('analyticsClientId');
     if(cb) cb.checked=_analyticsOptIn;
-    if(st) st.textContent=_analyticsOptIn?'✓ Sharing enabled — community comparison unlocked':'Off — enable to compare your pool against other users';
+    if(st) st.textContent=_analyticsOptIn?'✓ Active — community comparison unlocked':'Disabled — uncheck above to stop sharing';
     if(ci) ci.textContent=d.client_id||'(will be generated on next run)';
     if(_analyticsOptIn) fetchCommunityStats();
   }catch(e){ dbgLog('Analytics settings load failed: '+e.message); }
@@ -4163,7 +4163,7 @@ async function setAnalyticsOptIn(checked){
     // Reload to get client_id if just opted in
     await loadAnalyticsSettings();
     if(checked) fetchCommunityStats();
-    toast(checked?'Analytics sharing enabled — community comparison active':'Analytics sharing disabled');
+    toast(checked?'Analytics sharing enabled':'Analytics sharing disabled');
   }catch(e){
     if(st) st.textContent='Save failed';
     toast('Failed to save setting',true);

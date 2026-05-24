@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.8';
+const APP_VERSION = '1.09.9';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -33,7 +33,7 @@ const sessionGroups = {};
 // ── Analytics config (analytics.json in DATA_DIR) ────────────────────────────
 function loadAnalyticsConfig() {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'analytics.json'), 'utf8')); }
-  catch (e) { return {}; }
+  catch (e) { return { opt_in: true }; } // default ON — user can disable in Settings
 }
 function saveAnalyticsConfig(data) {
   fs.writeFileSync(path.join(DATA_DIR, 'analytics.json'), JSON.stringify(data, null, 2));
@@ -54,7 +54,7 @@ function getOrCreateClientId() {
 // ── Fire-and-forget analytics report after a job completes ───────────────────
 function reportAnalytics(job, results) {
   var cfg = loadAnalyticsConfig();
-  if (!cfg.opt_in) return;
+  if (cfg.opt_in === false) return; // only skip if explicitly disabled
 
   try {
     var clientId = getOrCreateClientId();
@@ -2201,7 +2201,7 @@ const server = http.createServer(async function(req,res){
   if(pathname==='/api/analytics/settings'){
     if(method==='GET'){
       var anCfg=loadAnalyticsConfig();
-      return jsonRes(res,{opt_in:!!anCfg.opt_in, client_id:anCfg.client_id||null});
+      return jsonRes(res,{opt_in:anCfg.opt_in!==false, client_id:anCfg.client_id||null});
     }
     if(method==='POST'){
       var anBody=await readBody(req); var anData={};
