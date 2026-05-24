@@ -454,7 +454,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.1</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.2</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -465,10 +465,12 @@ body.light-mode .ip-group{background:#ffffff;}
 </nav>
 
 <!-- ── Update banner ─────────────────────────────────────────────────────── -->
-<div id="updateBanner" style="display:none;background:#1a1a2e;border-bottom:1px solid var(--accent);padding:7px 20px;display:none;align-items:center;gap:12px;">
+<div id="updateBanner" style="display:none;background:#1a1a2e;border-bottom:1px solid var(--accent);padding:7px 20px;align-items:center;gap:12px;">
   <span style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em">UPDATE AVAILABLE</span>
   <span id="updateBannerText" style="font-size:11px;color:var(--muted);flex:1"></span>
-  <a id="updateBannerLink" href="#" target="_blank" style="font-size:11px;color:var(--accent);font-weight:600;text-decoration:none;border:1px solid var(--accent);padding:3px 10px;border-radius:var(--r-xs);">VIEW RELEASE</a>
+  <span id="updateBannerStatus" style="font-size:11px;color:var(--accent);display:none"></span>
+  <a id="updateBannerLink" href="#" target="_blank" style="font-size:11px;color:var(--muted);font-weight:500;text-decoration:none;padding:3px 6px;border-radius:var(--r-xs);">VIEW RELEASE</a>
+  <button id="updateInstallBtn" onclick="installUpdate()" style="font-size:11px;color:#0a0a0c;background:var(--accent);font-weight:700;border:none;cursor:pointer;padding:4px 12px;border-radius:var(--r-xs);letter-spacing:.06em">INSTALL UPDATE</button>
   <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
 </div>
 
@@ -3240,19 +3242,74 @@ async function fetchFromApi(){
 //  deleteIntegration are defined below with appPrompt already)
 
 // ── Auto-update check ──────────────────────────────────────────────────────
+var _pendingUpdateUrl = null;   // zip download URL stored when update found
+var _pendingUpdateVer = null;   // latest version string
+
 async function checkForUpdate(){
   try{
     var r=await fetch('https://api.github.com/repos/treys5/proxykit/releases/latest',{cache:'no-store'});
     if(!r.ok) return;
     var d=await r.json();
     var latest=(d.tag_name||'').replace(/^v/,'');
-    var current='1.08';
-    if(latest&&latest!==current&&latest>current){
-      document.getElementById('updateBannerText').textContent='v'+latest+' is available (you have v'+current+')';
-      document.getElementById('updateBannerLink').href=d.html_url||'https://github.com/treys5/proxykit/releases/latest';
-      document.getElementById('updateBanner').style.display='flex';
+    // Pull current version from server
+    var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
+    var current='1.09.2';
+    if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
+    if(!latest) return;
+    // Simple semver compare
+    function semCmp(a,b){
+      var pa=a.split('.').map(Number), pb=b.split('.').map(Number);
+      for(var i=0;i<Math.max(pa.length,pb.length);i++){
+        var va=pa[i]||0, vb=pb[i]||0;
+        if(va>vb) return 1; if(va<vb) return -1;
+      }
+      return 0;
     }
-  }catch(e){}
+    if(semCmp(latest,current)<=0) return;
+
+    document.getElementById('updateBannerText').textContent='v'+latest+' is available (you have v'+current+')';
+    document.getElementById('updateBannerLink').href=d.html_url||'https://github.com/treys5/proxykit/releases/latest';
+
+    // Find best asset: prefer named *update*.zip, fall back to source zip
+    var asset=null;
+    if(d.assets&&d.assets.length){
+      asset=d.assets.find(function(a){ return /update/i.test(a.name)&&/\.zip$/i.test(a.name); });
+      if(!asset) asset=d.assets.find(function(a){ return /\.zip$/i.test(a.name); });
+    }
+    _pendingUpdateUrl = asset
+      ? asset.browser_download_url
+      : 'https://github.com/treys5/proxykit/archive/refs/tags/'+d.tag_name+'.zip';
+    _pendingUpdateVer = latest;
+
+    document.getElementById('updateBanner').style.display='flex';
+  }catch(e){ console.warn('Update check failed:',e); }
+}
+
+async function installUpdate(){
+  if(!_pendingUpdateUrl){ alert('No update URL found. Please update manually.'); return; }
+  var btn=document.getElementById('updateInstallBtn');
+  var statusEl=document.getElementById('updateBannerStatus');
+  btn.disabled=true; btn.textContent='Downloading...';
+  statusEl.style.display=''; statusEl.textContent='';
+
+  try{
+    var r=await fetch('/api/apply-update',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({download_url:_pendingUpdateUrl,version:_pendingUpdateVer||''})
+    });
+    var data=await r.json();
+    if(!r.ok||!data.ok) throw new Error(data.error||('HTTP '+r.status));
+
+    btn.style.display='none';
+    statusEl.textContent='✓ Updated to v'+data.version+' — restart to apply';
+    statusEl.style.color='#4caf50';
+    document.getElementById('updateBannerText').textContent='Update applied! Close and relaunch Proxy Tester to use v'+data.version+'.';
+  }catch(e){
+    btn.disabled=false; btn.textContent='INSTALL UPDATE';
+    statusEl.textContent='✗ '+e.message;
+    statusEl.style.color='#ef5350';
+  }
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
@@ -3263,7 +3320,7 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.09.1 started');
+dbgLog('Proxy Tester v1.09.2 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){

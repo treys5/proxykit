@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 'use strict';
 
-const http = require('http');
-const net  = require('net');
-const tls  = require('tls');
-const fs   = require('fs');
-const path = require('path');
-const url  = require('url');
+const http  = require('http');
+const https = require('https');
+const net   = require('net');
+const tls   = require('tls');
+const fs    = require('fs');
+const path  = require('path');
+const url   = require('url');
+const os    = require('os');
+const cp    = require('child_process');
+const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.1';
+const APP_VERSION = '1.09.2';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -1389,7 +1393,7 @@ const server = http.createServer(async function(req,res){
   res.setHeader('Access-Control-Allow-Headers','Content-Type');
   if(method==='OPTIONS'){res.writeHead(204);res.end();return;}
 
-  if(pathname==='/api/version') return jsonRes(res,{version:APP_VERSION});
+  if(pathname==='/api/version') return jsonRes(res,{version:global._UPDATED_VERSION||APP_VERSION});
 
   // SSE real-time progress stream
   if(pathname==='/api/events'&&method==='GET'){
@@ -1936,6 +1940,73 @@ const server = http.createServer(async function(req,res){
       const fp=path.join(__dirname,'results','session_'+sid+'.json');
       if(fs.existsSync(fp))fs.unlinkSync(fp);
       return jsonRes(res,{deleted:sid});
+    }
+  }
+
+  // ── In-app update endpoint ────────────────────────────────────────────────
+  if(pathname==='/api/apply-update'&&method==='POST'){
+    var body=await readBody(req); var data={};
+    try{data=JSON.parse(body.toString());}catch(e){}
+    var downloadUrl=data.download_url;
+    var newVersion=data.version||'';
+    if(!downloadUrl) return jsonRes(res,{error:'Missing download_url'},400);
+    // Stream zip to temp file then extract source files
+    var tmpZip=path.join(os.tmpdir(),'proxytester-update-'+Date.now()+'.zip');
+    try{
+      await new Promise(function(resolve,reject){
+        var out=fs.createWriteStream(tmpZip);
+        function doGet(u){
+          var mod=u.startsWith('https')?https:http;
+          mod.get(u,{headers:{'User-Agent':'ProxyTester-Updater'}},function(r){
+            if(r.statusCode===301||r.statusCode===302||r.statusCode===307||r.statusCode===308){
+              return doGet(r.headers.location);
+            }
+            r.pipe(out);
+            out.on('finish',resolve);
+            out.on('error',reject);
+            r.on('error',reject);
+          }).on('error',reject);
+        }
+        doGet(downloadUrl);
+      });
+      // Extract zip using PowerShell (Windows) or unzip (unix)
+      var extracted=path.join(os.tmpdir(),'proxytester-update-'+Date.now());
+      fs.mkdirSync(extracted,{recursive:true});
+      if(process.platform==='win32'){
+        cp.execSync('powershell -NoProfile -Command "Add-Type -A System.IO.Compression.FileSystem;[IO.Compression.ZipFile]::ExtractToDirectory(\''+tmpZip.replace(/'/g,"''")+'\',\''+extracted.replace(/'/g,"''")+'\');"');
+      } else {
+        cp.execSync('unzip -q '+JSON.stringify(tmpZip)+' -d '+JSON.stringify(extracted));
+      }
+      // The archive may have a root folder (GitHub archive style)
+      var entries=fs.readdirSync(extracted);
+      var srcDir=extracted;
+      if(entries.length===1&&fs.statSync(path.join(extracted,entries[0])).isDirectory()){
+        srcDir=path.join(extracted,entries[0]);
+      }
+      // Copy source files into __dirname
+      var FILES=['server.js','index.html','main.js','package.json','ProxyTester.ps1','version.json'];
+      var updated=[];
+      FILES.forEach(function(f){
+        var src=path.join(srcDir,f);
+        var dst=path.join(__dirname,f);
+        if(fs.existsSync(src)){
+          fs.copyFileSync(src,dst);
+          updated.push(f);
+          // Read version from the extracted version.json if caller didn't supply it
+          if(f==='version.json'&&!newVersion){
+            try{ newVersion=JSON.parse(fs.readFileSync(src,'utf8')).version||''; }catch(e){}
+          }
+        }
+      });
+      // Cleanup
+      try{fs.unlinkSync(tmpZip);}catch(e){}
+      try{fs.rmSync(extracted,{recursive:true,force:true});}catch(e){}
+      // Update in-memory version constant so /api/version reflects new version immediately
+      if(newVersion) global._UPDATED_VERSION=newVersion;
+      return jsonRes(res,{ok:true,updated:updated,version:newVersion||'unknown',needs_restart:true});
+    }catch(e){
+      try{fs.unlinkSync(tmpZip);}catch(e2){}
+      return jsonRes(res,{error:'Update failed: '+e.message},500);
     }
   }
 
