@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.4';
+const APP_VERSION = '1.09.5';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -1361,6 +1361,43 @@ function buildJobStatsText(job) {
   return lines.join('\n');
 }
 
+function buildSessionStatsText(sessId) {
+  // Aggregate stats across all jobs in this session
+  var sessJobs = Object.values(jobs).filter(function(j){ return j.session_id === sessId; });
+  if (!sessJobs.length) return 'No data.';
+  var totalTested=0, totalPassed=0, totalFailed=0;
+  var totalPx=0, totalPxTested=0, totalTargetTested=0, totalTargetPassed=0;
+  var totalBytes=0;
+  var iaLast=null;
+  sessJobs.forEach(function(j){
+    totalTested+=j.total||0; totalPassed+=j.passed||0; totalFailed+=j.failed||0;
+    var du=j.data_usage||{};
+    totalPx+=du.px_challenge_count||0;
+    totalPxTested+=j.total||0;
+    totalTargetTested+=du.target_tested||0;
+    totalTargetPassed+=du.target_passed||0;
+    totalBytes+=du.total_bytes||0;
+    if(j.ip_analysis) iaLast=j.ip_analysis;
+  });
+  var lines=[
+    'Session: '+sessId+' ('+sessJobs.length+' run'+(sessJobs.length>1?'s':'')+', '+totalTested+' proxy tests total)',
+    'Pass rate: '+(totalTested>0?((totalPassed/totalTested)*100).toFixed(1):0)+'% ('+totalPassed+'/'+totalTested+')',
+  ];
+  if(totalPxTested>0) lines.push('PX detection rate: '+(Math.round(totalPx/totalPxTested*1000)/10)+'% ('+totalPx+' hits across '+totalPxTested+' tests)');
+  if(totalTargetTested>0) lines.push('Target URL pass rate: '+(Math.round(totalTargetPassed/totalTargetTested*1000)/10)+'% ('+totalTargetPassed+'/'+totalTargetTested+')');
+  if(totalBytes) lines.push('Total data used: '+(totalBytes/1048576).toFixed(2)+' MB');
+  if(iaLast&&iaLast.quality_score!=null){
+    lines.push('Pool quality score: '+iaLast.quality_score+'/100');
+    lines.push('Residential: '+(iaLast.residential_count||0)+' ('+(iaLast.residential_pct||0)+'%)');
+    lines.push('Datacenter: '+(iaLast.datacenter_count||0)+' ('+(iaLast.datacenter_pct||0)+'%)');
+    lines.push('Unique egress IPs: '+(iaLast.unique_ips||0)+' / '+(iaLast.total_with_ip||0));
+    lines.push('IP reuse rate: '+(iaLast.reuse_rate_pct||0)+'%');
+    if(iaLast.ssl_inspected_count) lines.push('SSL inspection: '+iaLast.ssl_inspected_count+' proxies');
+    if(iaLast.top_asns&&iaLast.top_asns.length) lines.push('Top ASNs: '+iaLast.top_asns.slice(0,3).map(function(x){return x.asn+'('+x.count+')';}).join(', '));
+  }
+  return lines.join('\n');
+}
+
 function buildAiPrompt(job, compareJob) {
   var ctx = [
     'You are an expert proxy pool analyst for e-commerce automation.',
@@ -2052,10 +2089,18 @@ const server = http.createServer(async function(req,res){
     for(var pi=0;pi<providerOrder.length;pi++){
       if(keys2[providerOrder[pi]]){chosenProvider=providerOrder[pi];chosenKey=keys2[providerOrder[pi]];break;}
     }
-    if(!chosenProvider) return jsonRes(res,{error:'No AI key configured. Add one in Settings → AI Integration.'},400);
-    var job1=jobs[data.job_id], job2=data.compare_job_id?jobs[data.compare_job_id]:null;
-    if(!job1) return jsonRes(res,{error:'Job not found'},404);
-    var prompt=buildAiPrompt(job1,job2);
+    if(!chosenProvider) return jsonRes(res,{error:'No AI key configured. Add one in Settings > AI Integration.'},400);
+    var prompt;
+    if(data.session_id){
+      var sessStats=buildSessionStatsText(data.session_id);
+      if(sessStats==='No data.') return jsonRes(res,{error:'Session has no completed runs yet'},400);
+      var ctx2=['You are an expert proxy pool analyst for e-commerce automation.','Proxies are residential IPs used to evade bot detection on retail sites like Walmart.','','Key metric guide:','- PX detection %: PerimeterX challenge rate. 0%=clean, 10%+=concerning, 30%+=heavily flagged.','- Residential %: higher is better. DC IPs blocked by anti-bot.','- IP reuse rate: lower is better.','Be concise, direct, practical. No hedging.'].join('\n');
+      prompt=ctx2+'\n\nAnalyze this multi-run proxy session. Give 3-5 specific actionable insights.\n\n'+sessStats+'\n\nAnswer: (1) Is this pool usable for Walmart right now? (2) What is the biggest risk across all runs? (3) What should the user do?';
+    } else {
+      var job1=jobs[data.job_id], job2=data.compare_job_id?jobs[data.compare_job_id]:null;
+      if(!job1) return jsonRes(res,{error:'Job not found'},404);
+      prompt=buildAiPrompt(job1,job2);
+    }
     try{
       var aiText=await callAI(chosenProvider,chosenKey,prompt);
       return jsonRes(res,{response:aiText,provider:chosenProvider});

@@ -490,7 +490,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.4</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.5</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -707,91 +707,152 @@ body.light-mode .ip-group{background:#ffffff;}
         <button class="btn btn-sm btn-red" onclick="deleteSession()">✕</button>
       </span>
     </div>
-    <div class="stats-row">
-      <div class="stat"><div class="stat-v" id="sdTotal">—</div><div class="stat-l">PROXIES</div></div>
-      <div class="stat"><div class="stat-v g" id="sdRuns">—</div><div class="stat-l">RUNS</div></div>
-      <div class="stat"><div class="stat-v gold" id="sdPassed">—</div><div class="stat-l">PASSED ALL</div></div>
-      <div class="stat"><div class="stat-v" id="sdStatus">—</div><div class="stat-l">STATUS</div></div>
+
+    <!-- ── SECTION 1: SESSION POOL OVERVIEW ─────────────────────────────────── -->
+    <div class="res-overview" id="sessOverviewSection">
+      <!-- Left: Score + AI button -->
+      <div class="res-score-col">
+        <div class="res-score-lbl">POOL SCORE</div>
+        <div class="res-big-score" id="sovScore" style="color:var(--muted)">—</div>
+        <div class="res-score-grade" id="sovGrade" style="color:var(--muted)">ANALYZING</div>
+        <button class="res-ai-btn" id="sessAiBtn" onclick="askAISess()">🤖 ASK AI</button>
+        <!-- backward compat hidden stats -->
+        <span id="sdTotal" style="display:none">—</span>
+        <span id="sdRuns" style="display:none">—</span>
+        <span id="sdPassed" style="display:none">—</span>
+        <span id="sdStatus" style="display:none">—</span>
+      </div>
+      <!-- Right: KPIs + bars + latency -->
+      <div class="res-detail-col">
+        <div class="res-kpi-grid">
+          <div class="res-kpi"><div class="res-kpi-v" id="sovPassedAll">—</div><div class="res-kpi-l">PASSED ALL</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="sovAvgSpeed">—</div><div class="res-kpi-l">AVG SPEED</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="sovUniqueIPs">—</div><div class="res-kpi-l">UNIQUE IPs</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="sovDiversity">—</div><div class="res-kpi-l">DIVERSITY</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="sovRuns">—</div><div class="res-kpi-l">RUNS</div></div>
+          <div class="res-kpi"><div class="res-kpi-v" id="sovStatus">—</div><div class="res-kpi-l">STATUS</div></div>
+        </div>
+        <div class="res-alerts" id="sovAlerts"></div>
+        <div class="res-type-bars" id="sovTypeBars" style="display:none">
+          <div class="res-type-bars-title">IP TYPE BREAKDOWN</div>
+          <div id="sovTypeBarsInner"></div>
+          <div style="margin-top:10px;">
+            <div class="res-type-bars-title" style="margin-bottom:6px">LATENCY DISTRIBUTION</div>
+            <div class="res-lat-chart" id="sovLatChart"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Session Analytics (composite ranking first — most important) -->
-    <div id="sessAnalyticsPanel" class="analytics-section" style="display:none">
-      <div class="analytics-ph">⬡ SESSION ANALYTICS
-        <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
-          <input type="number" id="compositeCopyN" value="1000" min="1" max="10000"
-            style="width:72px;padding:3px 6px;margin:0;font-size:11px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
-            title="Number of proxies to copy">
-          <button class="btn btn-out btn-sm" onclick="copyComposite()" id="compositeCopyBtn">⎘ COPY BEST</button>
-        </span>
+    <!-- Session AI response panel -->
+    <div id="sessAiPanel" class="ai-panel" style="display:none">
+      <div class="ai-panel-hdr">
+        <span>🤖</span><span>AI SESSION ANALYSIS</span>
+        <span id="sessAiBadge" class="ai-provider-badge" style="display:none"></span>
+        <span id="sessAiSpinner" class="ai-spinner" style="display:none"></span>
+        <button onclick="document.getElementById('sessAiPanel').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px">✕</button>
       </div>
-      <details class="sess-detail-section" style="border-top:1px solid var(--border)">
-      <summary>⬡ ADVANCED ANALYSIS — ISP PROFILE &amp; CROWDING</summary>
-      <!-- ISP Speed Profile -->
-      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">ISP SPEED PROFILE</div>
-      <div style="overflow-x:auto;max-height:200px;overflow-y:auto;">
-        <table class="analytics-table"><thead><tr>
-          <th>ISP</th><th>COUNT</th><th>POOL %</th><th>AVG MS</th><th>CONSISTENCY</th><th>TYPE</th>
-        </tr></thead><tbody id="ispProfileBody"></tbody></table>
+      <div class="ai-panel-body" id="sessAiBody">Analyzing session...</div>
+    </div>
+
+    <!-- ── SECTION 2: PX RISK ANALYSIS ──────────────────────────────────────── -->
+    <div class="px-section" id="sessPxSection" style="display:none">
+      <div class="px-section-hdr">
+        <span class="px-section-title">PX RISK ANALYSIS</span>
+        <span id="sessPxSub" style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px"></span>
       </div>
-      <!-- Crowding Analysis -->
-      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:4px;">IP CROWDING ANALYSIS</div>
-      <div id="crowdingContent" style="padding:0 16px 10px;font-size:11px;color:var(--muted)">Analyzing...</div>
+      <div class="px-grid">
+        <div class="px-score-col">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">PX DETECT RATE</div>
+          <div class="px-big" id="sessPxBig" style="color:#ef5350">—</div>
+          <div id="sessPxRisk" style="font-size:10px;font-weight:700;letter-spacing:.08em;margin-top:2px"></div>
+          <div id="sessPxSafe" style="margin-top:8px"></div>
+        </div>
+        <div class="px-detail-col">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PX HIT RATE BY ISP</div>
+          <div id="sessPxIspList"></div>
+          <div id="sessPxInterpret" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;border-top:1px solid rgba(255,255,255,.05);padding-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECTION 3: ADVANCED (collapsed) ──────────────────────────────────── -->
+    <details class="sess-detail-section" id="sessAdvanced">
+      <summary>⬡ ADVANCED — RANKINGS, HISTORY &amp; EXPORT</summary>
+
+      <!-- Session Analytics (composite ranking) -->
+      <div id="sessAnalyticsPanel" class="analytics-section" style="display:none">
+        <div class="analytics-ph">⬡ SESSION ANALYTICS
+          <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+            <input type="number" id="compositeCopyN" value="1000" min="1" max="10000"
+              style="width:72px;padding:3px 6px;margin:0;font-size:11px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
+              title="Number of proxies to copy">
+            <button class="btn btn-out btn-sm" onclick="copyComposite()" id="compositeCopyBtn">⎘ COPY BEST</button>
+          </span>
+        </div>
+        <details class="sess-detail-section" style="border-top:1px solid var(--border)">
+          <summary>⬡ ISP PROFILE &amp; CROWDING</summary>
+          <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">ISP SPEED PROFILE</div>
+          <div style="overflow-x:auto;max-height:200px;overflow-y:auto;">
+            <table class="analytics-table"><thead><tr>
+              <th>ISP</th><th>COUNT</th><th>POOL %</th><th>AVG MS</th><th>CONSISTENCY</th><th>TYPE</th>
+            </tr></thead><tbody id="ispProfileBody"></tbody></table>
+          </div>
+          <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:4px;">IP CROWDING ANALYSIS</div>
+          <div id="crowdingContent" style="padding:0 16px 10px;font-size:11px;color:var(--muted)">Analyzing...</div>
+        </details>
+        <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">COMPOSITE RANKING <span style="font-weight:400;color:var(--muted);font-size:9px">(40% speed · 30% consistency · 20% IP uniqueness · 10% type)</span></div>
+        <div style="overflow-x:auto;max-height:260px;overflow-y:auto;">
+          <table class="analytics-table"><thead><tr>
+            <th>#</th><th>SCORE</th><th>PROXY</th><th>ISP</th><th>EGRESS IP</th><th>AVG MS</th><th>PASSES</th><th>CROWD</th>
+          </tr></thead><tbody id="compositeBody"></tbody></table>
+        </div>
+      </div>
+
+      <!-- IP Analysis (detailed) -->
+      <div id="sessAnalysisDetail" style="display:none">
+        <div id="sessAnalysisPanel"><div id="sessAnalysisContent"></div></div>
+      </div>
+
+      <!-- Run history -->
+      <details class="sess-detail-section" id="sessRunsDetail">
+        <summary id="sessRunsSummary">⬡ RUN HISTORY</summary>
+        <div id="runsList"></div>
       </details>
-      <!-- Composite Ranking -->
-      <div style="padding:10px 16px 4px;font-size:10px;letter-spacing:.1em;color:var(--muted);font-weight:600;">COMPOSITE RANKING <span style="font-weight:400;color:var(--muted);font-size:9px">(40% speed · 30% consistency · 20% IP uniqueness · 10% type · excludes mobile/DC)</span></div>
-      <div style="overflow-x:auto;max-height:260px;overflow-y:auto;">
-        <table class="analytics-table"><thead><tr>
-          <th>#</th><th>SCORE</th><th>PROXY</th><th>ISP</th><th>EGRESS IP</th><th>AVG MS</th><th>PASSES</th><th>CROWD</th>
-        </tr></thead><tbody id="compositeBody"></tbody></table>
-      </div>
-    </div>
 
-    <!-- IP Analysis (collapsible) -->
-    <details class="sess-detail-section" id="sessAnalysisDetail">
-      <summary>⬡ IP POOL ANALYSIS</summary>
-      <div id="sessAnalysisPanel">
-        <div id="sessAnalysisContent"></div>
+      <!-- Results filter + table -->
+      <div class="filter-row">
+        <span class="filter-tag">MIN PASSES:</span>
+        <input type="number" id="minPasses" value="3" min="1" max="10"
+          style="width:52px;padding:3px 7px;margin:0;font-size:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
+          oninput="renderSessResults()">
+        <span class="filter-tag" id="minPassesLabel">of 0 runs</span>
+        <span style="margin-left:6px;color:var(--border-hi)">|</span>
+        <button class="filter-btn active" id="sf-all"  onclick="setSessFilter('all')">ALL</button>
+        <button class="filter-btn" id="sf-residential" onclick="setSessFilter('residential')">RESI</button>
+        <button class="filter-btn" id="sf-mobile"      onclick="setSessFilter('mobile')">MOBILE</button>
+        <button class="filter-btn" id="sf-unknown"     onclick="setSessFilter('unknown')">UNKNOWN</button>
+        <button class="filter-btn" id="sf-datacenter"  onclick="setSessFilter('datacenter')">DC</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="sessResCount"></span>
+      </div>
+      <div class="provider-strip-wrap">
+        <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',-1)">‹</button>
+        <div id="sessProviderTabs" class="provider-strip"></div>
+        <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',1)">›</button>
+      </div>
+      <div id="sessProviderSummary" class="provider-summary"></div>
+      <div id="sessSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
+      <div class="tbl-wrap" style="max-height:640px;">
+        <div id="sessBody"></div>
+        <div id="sessEmpty" class="empty" style="display:none">No proxies passed yet. Results appear after each run.</div>
+      </div>
+      <div class="export-bar">
+        <span class="export-lbl" id="sessExportLbl"></span>
+        <button class="btn btn-out btn-sm" id="sessCopyBtn" onclick="copySession()">⎘ COPY TOP 1000</button>
+        <button class="btn btn-out btn-sm" onclick="exportSession()">⬇ TXT</button>
+        <button class="btn btn-out btn-sm" onclick="downloadSessionDebug()">AI DEBUG</button>
       </div>
     </details>
-
-    <!-- Run jobs (collapsible) -->
-    <details class="sess-detail-section" id="sessRunsDetail">
-      <summary id="sessRunsSummary">⬡ RUN HISTORY</summary>
-      <div id="runsList"></div>
-    </details>
-
-    <!-- Results -->
-    <div class="filter-row">
-      <span class="filter-tag">MIN PASSES:</span>
-      <input type="number" id="minPasses" value="3" min="1" max="10"
-        style="width:52px;padding:3px 7px;margin:0;font-size:12px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;font-family:var(--mono);"
-        oninput="renderSessResults()">
-      <span class="filter-tag" id="minPassesLabel">of 0 runs</span>
-      <span style="margin-left:6px;color:var(--border-hi)">|</span>
-      <button class="filter-btn active" id="sf-all"  onclick="setSessFilter('all')">ALL</button>
-      <button class="filter-btn" id="sf-residential" onclick="setSessFilter('residential')">RESI</button>
-      <button class="filter-btn" id="sf-mobile"      onclick="setSessFilter('mobile')">MOBILE</button>
-      <button class="filter-btn" id="sf-unknown"     onclick="setSessFilter('unknown')">UNKNOWN</button>
-      <button class="filter-btn" id="sf-datacenter"  onclick="setSessFilter('datacenter')">DC</button>
-      <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="sessResCount"></span>
-    </div>
-    <div class="provider-strip-wrap">
-      <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',-1)">‹</button>
-      <div id="sessProviderTabs" class="provider-strip"></div>
-      <button class="provider-nav" type="button" onclick="scrollProviderTabs('sessProviderTabs',1)">›</button>
-    </div>
-    <div id="sessProviderSummary" class="provider-summary"></div>
-    <div id="sessSubnetHeatmap" class="heatmap-wrap" style="display:none"></div>
-    <div class="tbl-wrap" style="max-height:640px;">
-      <div id="sessBody"></div>
-      <div id="sessEmpty" class="empty" style="display:none">No proxies passed yet. Results appear after each run.</div>
-    </div>
-    <div class="export-bar">
-      <span class="export-lbl" id="sessExportLbl"></span>
-      <button class="btn btn-out btn-sm" id="sessCopyBtn" onclick="copySession()">⎘ COPY TOP 1000</button>
-      <button class="btn btn-out btn-sm" onclick="exportSession()">⬇ TXT</button>
-      <button class="btn btn-out btn-sm" onclick="downloadSessionDebug()">AI DEBUG</button>
-    </div>
   </div>
 
   <!-- Single run jobs -->
@@ -1748,15 +1809,15 @@ async function updateSessionDetail(allSess,allJobs){
   var s=allSess.find(function(x){return x.session_id===activeSessionId;});
   if(!s) return;
   document.getElementById('sessDetailName').textContent=s.name;
-  document.getElementById('sdTotal').textContent=s.proxy_count.toLocaleString();
-  document.getElementById('sdRuns').textContent=s.run_count;
-  document.getElementById('sdPassed').textContent=s.passed_all!==undefined?s.passed_all.toLocaleString():'—';
-  document.getElementById('sdStatus').textContent=s.status==='running'?'RUNNING':'IDLE';
-  document.getElementById('sdStatus').className='stat-v'+(s.status==='running'?' g':'');
   document.getElementById('minPassesLabel').textContent='of '+s.run_count+' runs';
   var runsSummary=document.getElementById('sessRunsSummary');
   if(runsSummary) runsSummary.textContent='⬡ RUN HISTORY ('+s.run_count+' run'+(s.run_count!==1?'s':'')+')';
 
+  // Overview KPIs that come from the session object directly
+  var statusEl=document.getElementById('sovStatus');
+  if(statusEl){ statusEl.textContent=s.status==='running'?'RUNNING':'IDLE'; statusEl.style.color=s.status==='running'?'var(--accent)':'var(--muted)'; }
+  var runsEl=document.getElementById('sovRuns');
+  if(runsEl) runsEl.textContent=s.run_count;
 
   var sjobs=allJobs.filter(function(j){return j.session_id===activeSessionId;});
   document.getElementById('runsList').innerHTML=sjobs.length
@@ -1786,6 +1847,11 @@ async function updateSessionDetail(allSess,allJobs){
     if(r.ok){
       var d=await r.json();
       _sessAnalyzed=d.proxies||[];
+      // Populate overview section with real data
+      renderSessOverview(s, d.ip_analysis||null, _sessAnalyzed, sjobs);
+      // PX section
+      renderSessPxSection(sjobs, _sessAnalyzed);
+      // Keep old renderAnalysis for the hidden backing element (ISP tabs use it)
       if(d.ip_analysis) renderAnalysis(d.ip_analysis,'sessAnalysisPanel');
     }
     if(ar.ok){
@@ -1795,6 +1861,177 @@ async function updateSessionDetail(allSess,allJobs){
     }
   }
   renderSessResults();
+}
+
+function renderSessOverview(s, ia, proxies, sjobs){
+  // Pool score
+  var score=ia?ia.quality_score:null;
+  var scoreColor=score==null?'var(--muted)':score>=70?'var(--accent)':score>=40?'#ffcc00':'var(--fail)';
+  var scoreGrade=score==null?'NO DATA':score>=70?'GOOD POOL':score>=40?'MIXED POOL':'POOR POOL';
+  document.getElementById('sovScore').textContent=score!=null?score:'—';
+  document.getElementById('sovScore').style.color=scoreColor;
+  document.getElementById('sovGrade').textContent=scoreGrade;
+  document.getElementById('sovGrade').style.color=scoreColor;
+
+  // Passed all %
+  var passedAll=s.passed_all||0;
+  var passedPct=s.proxy_count>0?((passedAll/s.proxy_count)*100).toFixed(1)+'%':'—';
+  var passColor=s.proxy_count>0?(passedAll/s.proxy_count>=.5?'var(--accent)':passedAll/s.proxy_count>=.2?'#ffcc00':'var(--fail)'):'var(--muted)';
+  document.getElementById('sovPassedAll').textContent=passedAll>0?passedAll.toLocaleString()+' ('+passedPct+')':'—';
+  document.getElementById('sovPassedAll').style.color=passColor;
+  document.getElementById('sovPassedAll').style.fontSize='13px';
+
+  // Avg speed from proxy data
+  var passing=proxies.filter(function(p){return p.avg_ms!=null||p.mean_lat!=null;});
+  var avgMs=passing.length?Math.round(passing.reduce(function(a,p){return a+(p.mean_lat||p.avg_ms||0);},0)/passing.length):null;
+  var speedColor=avgMs==null?'var(--muted)':avgMs<200?'var(--accent)':avgMs<500?'#ffcc00':'var(--fail)';
+  document.getElementById('sovAvgSpeed').textContent=avgMs!=null?avgMs+'ms':'—';
+  document.getElementById('sovAvgSpeed').style.color=speedColor;
+
+  // Unique IPs
+  var uniqueIPs=ia?ia.unique_ips:null;
+  document.getElementById('sovUniqueIPs').textContent=uniqueIPs!=null?uniqueIPs.toLocaleString():'—';
+
+  // Resi diversity
+  var resiPct=ia&&ia.total_passed>0?Math.round((ia.residential_count||0)/ia.total_passed*100):null;
+  var divColor=resiPct==null?'var(--muted)':resiPct>=80?'var(--accent)':resiPct>=50?'#ffcc00':'var(--fail)';
+  document.getElementById('sovDiversity').textContent=resiPct!=null?resiPct+'% RESI':'—';
+  document.getElementById('sovDiversity').style.color=divColor;
+  document.getElementById('sovDiversity').style.fontSize=resiPct!=null?'14px':'20px';
+
+  // Alerts
+  var alerts='';
+  if(ia){
+    if(ia.private_count>0) alerts+='<div class="alert-box alert-bad">'+ia.private_count+' private IP leaks (RFC1918)</div>';
+    if(ia.datacenter_pct>10) alerts+='<div class="alert-box alert-bad">'+ia.datacenter_pct+'% datacenter IPs detected</div>';
+    else if(ia.datacenter_count>0) alerts+='<div class="alert-box alert-warn">'+ia.datacenter_count+' datacenter IPs (excluded from copy)</div>';
+    if(ia.reuse_rate_pct>30) alerts+='<div class="alert-box alert-bad">'+ia.reuse_rate_pct+'% IP reuse — pool smaller than advertised</div>';
+    else if(ia.reuse_rate_pct>10) alerts+='<div class="alert-box alert-warn">'+ia.reuse_rate_pct+'% IP reuse across runs</div>';
+    if((ia.ssl_inspected_count||0)>0) alerts+='<div class="alert-box alert-bad">'+ia.ssl_inspected_count+' proxies intercepting SSL</div>';
+    if((ia.rotating_count||0)>0) alerts+='<div class="alert-box alert-warn">'+ia.rotating_count+' rotating proxies detected</div>';
+    if((ia.crowded_subnets||[]).length>0) alerts+='<div class="alert-box alert-warn">'+ia.crowded_subnets.length+' crowded /24 subnets — burn risk</div>';
+    if(score>=70&&!alerts) alerts='<div class="alert-box alert-good">Pool looks clean — good residential diversity</div>';
+  }
+  document.getElementById('sovAlerts').innerHTML=alerts;
+
+  // Type bars + latency chart
+  if(ia&&ia.total_passed>0){
+    document.getElementById('sovTypeBars').style.display='';
+    var types=[
+      {k:'residential',label:'Resi',count:ia.residential_count||0},
+      {k:'mobile',label:'Mobile',count:ia.mobile_count||0},
+      {k:'unknown',label:'Unknown',count:ia.unknown_count||0},
+      {k:'flagged_proxy',label:'Flagged',count:ia.flagged_count||0},
+      {k:'datacenter',label:'DC',count:ia.datacenter_count||0},
+    ].filter(function(t){return t.count>0;});
+    document.getElementById('sovTypeBarsInner').innerHTML=types.map(function(t){
+      var pct=Math.round(t.count/ia.total_passed*100);
+      return '<div class="type-bar-row"><div class="type-bar-label">'+ipTypeDot(t.k)+t.label+'</div>'
+        +'<div class="type-bar-track"><div class="type-bar-fill" style="width:'+pct+'%;background:'+ipTypeColor(t.k)+'"></div></div>'
+        +'<div class="type-bar-val">'+pct+'%</div></div>';
+    }).join('');
+
+    var buckets=[{label:'<100',max:100,count:0},{label:'100-200',max:200,count:0},{label:'200-500',max:500,count:0},{label:'500-1k',max:1000,count:0},{label:'>1k',max:Infinity,count:0}];
+    passing.forEach(function(p){ var ms=p.mean_lat||p.avg_ms; for(var i=0;i<buckets.length;i++){if(ms<buckets[i].max){buckets[i].count++;break;}} });
+    var maxB=Math.max.apply(null,buckets.map(function(b){return b.count;}));
+    document.getElementById('sovLatChart').innerHTML=buckets.map(function(b){
+      var h=maxB>0?Math.max(3,Math.round(b.count/maxB*34)):3;
+      var col=b.label==='<100'?'var(--accent)':b.label==='100-200'?'rgba(129,140,248,.7)':'rgba(129,140,248,.35)';
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;">'
+        +'<div title="'+b.count+' proxies" style="width:100%;height:'+h+'px;background:'+col+';border-radius:2px 2px 0 0"></div>'
+        +'<div style="font-size:8px;color:var(--muted);margin-top:3px;white-space:nowrap">'+b.label+'</div></div>';
+    }).join('');
+  }
+}
+
+function renderSessPxSection(sjobs, proxies){
+  var pxEl=document.getElementById('sessPxSection');
+  // Aggregate PX data across all jobs in this session
+  var totalTested=0, totalPx=0, hasTarget=false;
+  (sjobs||[]).forEach(function(j){
+    if(j.data_usage){
+      if(j.data_usage.target_tested>0) hasTarget=true;
+      totalTested+=j.data_usage.target_tested||j.data_usage.httpbin_tested||0;
+      totalPx+=j.data_usage.px_challenge_count||0;
+    }
+  });
+  if(!hasTarget||totalTested===0){pxEl.style.display='none';return;}
+  pxEl.style.display='';
+
+  var pxPct=totalTested>0?Math.round(totalPx/totalTested*1000)/10:0;
+  var pxColor=pxPct>=30?'#ef5350':pxPct>=10?'#ff9800':pxPct>0?'#ffcc00':'var(--accent)';
+  var riskLabel=pxPct>=30?'HIGH RISK':pxPct>=10?'ELEVATED':pxPct>0?'LOW RISK':'CLEAN';
+  document.getElementById('sessPxBig').textContent=pxPct+'%';
+  document.getElementById('sessPxBig').style.color=pxColor;
+  document.getElementById('sessPxRisk').textContent=riskLabel;
+  document.getElementById('sessPxRisk').style.color=pxColor;
+  document.getElementById('sessPxSub').textContent=totalPx+' PX hits across '+totalTested+' proxy tests';
+
+  var safePct=pxPct>0?(100-pxPct):100;
+  document.getElementById('sessPxSafe').innerHTML='<span class="px-safe-badge" style="background:rgba('+(pxPct<10?'76,175,80':'239,83,80')+',.12);color:'+(pxPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(pxPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+
+  // Per-ISP from proxy data
+  var ispMap={};
+  (proxies||[]).forEach(function(p){
+    if(!p.ip_info) return;
+    var isp=p.ip_info.org||p.ip_info.isp||'Unknown';
+    if(!ispMap[isp]) ispMap[isp]={total:0,px:0};
+    ispMap[isp].total++;
+    if(p.target_px||p.px_challenge) ispMap[isp].px++;
+  });
+  var ispArr=Object.keys(ispMap).map(function(k){return{isp:k,total:ispMap[k].total,px:ispMap[k].px,rate:ispMap[k].total>0?ispMap[k].px/ispMap[k].total:0};});
+  ispArr.sort(function(a,b){return b.rate-a.rate||b.total-a.total;});
+  var topIsps=ispArr.filter(function(x){return x.total>=3;}).slice(0,8);
+  var maxRate=topIsps.length?topIsps[0].rate:1;
+  document.getElementById('sessPxIspList').innerHTML=topIsps.length?topIsps.map(function(x){
+    var pct=Math.round(x.rate*100);
+    var bw=maxRate>0?Math.round(x.rate/maxRate*100):0;
+    var col=pct>=30?'#ef5350':pct>=10?'#ff9800':pct>0?'#ffcc00':'var(--accent)';
+    return '<div class="px-isp-row"><div class="px-isp-name" title="'+esc(x.isp)+'">'+esc(x.isp)+'</div>'
+      +'<div class="px-isp-bar-track"><div class="px-isp-bar-fill" style="width:'+bw+'%;background:'+col+'"></div></div>'
+      +'<div class="px-isp-val" style="color:'+col+'">'+pct+'%</div>'
+      +'<div style="font-size:9px;color:var(--muted);margin-left:4px">'+x.px+'/'+x.total+'</div></div>';
+  }).join(''):'<div style="font-size:11px;color:var(--muted)">Not enough per-ISP data yet (need 3+ proxies per ISP)</div>';
+
+  var interpret='';
+  if(pxPct===0) interpret='No PX challenges detected across all runs. This pool is performing clean on Walmart.';
+  else if(pxPct<10) interpret='Low PX rate across '+sjobs.length+' run'+(sjobs.length>1?'s':'')+'. Good pool for Walmart. Cull the '+totalPx+' flagged proxies via Elite Filter.';
+  else if(pxPct<30) interpret='Elevated PX rate. About 1 in '+Math.round(100/pxPct)+' proxies triggers PerimeterX. Check ISP breakdown — some ISPs may be dragging the average down.';
+  else interpret='High PX rate across all runs. This pool is largely blocked by PerimeterX. Consider a different provider or aggressive ISP filtering.';
+  var safe=topIsps.filter(function(x){return x.rate<0.05;});
+  if(safe.length) interpret+=' Best-performing ISPs: '+safe.slice(0,3).map(function(x){return x.isp.split(' ')[0];}).join(', ')+'.';
+  document.getElementById('sessPxInterpret').textContent=interpret;
+}
+
+async function askAISess(){
+  if(!activeSessionId){toast('No active session.',true);return;}
+  var btn=document.getElementById('sessAiBtn');
+  var panel=document.getElementById('sessAiPanel');
+  var body=document.getElementById('sessAiBody');
+  var spinner=document.getElementById('sessAiSpinner');
+  var badge=document.getElementById('sessAiBadge');
+  if(btn){btn.disabled=true;btn.textContent='Analyzing...';}
+  panel.style.display='block';
+  body.textContent='Analyzing session...';
+  spinner.style.display=''; badge.style.display='none';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  try{
+    var r=await fetch(API+'/api/ai-analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:activeSessionId})
+    });
+    var d=await r.json();
+    spinner.style.display='none';
+    if(btn){btn.disabled=false;btn.textContent='🤖 ASK AI';}
+    if(d.error){body.textContent='⚠ '+d.error;return;}
+    badge.textContent=aiProviderLabel(d.provider); badge.style.display='';
+    body.innerHTML=formatAiResponse(d.response);
+  }catch(e){
+    spinner.style.display='none';
+    if(btn){btn.disabled=false;btn.textContent='🤖 ASK AI';}
+    body.textContent='⚠ Request failed: '+e.message;
+  }
 }
 
 function setSessFilter(f){
@@ -3495,7 +3732,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.4';
+    var current='1.09.5';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3562,7 +3799,7 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.09.4 started');
+dbgLog('Proxy Tester v1.09.5 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){
