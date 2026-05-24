@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.12';
+const APP_VERSION = '1.09.13';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -304,7 +304,7 @@ function detectBotVendor(body, headers, statusCode) {
 }
 
 // Always-on parallel test URLs (in addition to ip-api and optional target)
-const HTTPBIN_URL = 'http://httpbin.org/ip';
+const HTTPBIN_URL = 'http://httpbin.org/get';  // /get echoes request headers so we can detect anonymity level
 
 // Known datacenter ASN numbers for -20 score penalty
 const DATACENTER_ASN_NUMS = new Set([
@@ -441,6 +441,103 @@ function decodeChunked(body) {
   return result || body;
 }
 
+// ── Edge CDN / server fingerprint detection ───────────────────────────────────
+var CDN_SIGNATURES = [
+  { name:'cloudflare',  tests:[/cf-ray:/i,          /server:\s*cloudflare/i] },
+  { name:'akamai',      tests:[/server:\s*akamai/i,  /x-akamai-/i, /x-check-cacheable:/i, /akamaighost/i] },
+  { name:'cloudfront',  tests:[/x-amz-cf-id:/i,      /via:.*cloudfront/i] },
+  { name:'fastly',      tests:[/x-served-by:\s*cache-/i, /x-fastly/i, /x-timer:\s*s/i] },
+  { name:'azure',       tests:[/x-azure-ref:/i,      /x-msedge-ref:/i, /x-ec-custom-error:/i] },
+  { name:'imperva',     tests:[/x-iinfo:/i,           /x-cdn:\s*imperva/i] },
+  { name:'sucuri',      tests:[/x-sucuri-id:/i] },
+  { name:'vercel',      tests:[/x-vercel-id:/i,       /server:\s*vercel/i] },
+  { name:'bunnycdn',    tests:[/cdn-requestid:/i,     /server:\s*bunny/i] },
+  { name:'varnish',     tests:[/x-varnish:/i,         /via:.*varnish/i] },
+];
+
+function detectEdgeCDN(headers) {
+  if (!headers) return null;
+  for (var i = 0; i < CDN_SIGNATURES.length; i++) {
+    var sig = CDN_SIGNATURES[i];
+    if (sig.tests.some(function(re){ return re.test(headers); })) return sig.name;
+  }
+  return null;
+}
+
+// ── Anti-bot cookie classification ───────────────────────────────────────────
+var ANTIBOT_COOKIE_DEFS = [
+  { pattern:/_pxhd/i,        vendor:'px',         type:'device',    label:'PX device ID' },
+  { pattern:/_px[23]/i,      vendor:'px',         type:'tracking',  label:'PX risk session' },
+  { pattern:/_pxvid/i,       vendor:'px',         type:'tracking',  label:'PX visitor ID' },
+  { pattern:/_abck/i,        vendor:'akamai',     type:'tracking',  label:'Akamai Bot Manager' },
+  { pattern:/bm_sz/i,        vendor:'akamai',     type:'tracking',  label:'Akamai sensor data' },
+  { pattern:/cf_clearance/i, vendor:'cloudflare', type:'clearance', label:'CF challenge passed' },
+  { pattern:/__cf_bm/i,      vendor:'cloudflare', type:'tracking',  label:'CF Bot Management' },
+  { pattern:/datadome/i,     vendor:'datadome',   type:'tracking',  label:'DataDome session' },
+  { pattern:/incap_ses/i,    vendor:'imperva',    type:'tracking',  label:'Imperva session' },
+  { pattern:/visid_incap/i,  vendor:'imperva',    type:'device',    label:'Imperva visitor ID' },
+];
+
+function extractAntibotCookies(headersRaw) {
+  if (!headersRaw) return { cookies:[], has_clearance:false };
+  var cookies = [], has_clearance = false;
+  var lines = headersRaw.match(/set-cookie:\s*[^\r\n]+/gi) || [];
+  lines.forEach(function(line) {
+    var nm = line.match(/set-cookie:\s*([^=\s;,]+)/i);
+    if (!nm) return;
+    var cookieName = nm[1];
+    ANTIBOT_COOKIE_DEFS.forEach(function(def) {
+      if (def.pattern.test(cookieName)) {
+        cookies.push({ name:cookieName, vendor:def.vendor, type:def.type, label:def.label });
+        if (def.type === 'clearance') has_clearance = true;
+      }
+    });
+  });
+  return { cookies:cookies, has_clearance:has_clearance };
+}
+
+// ── PX risk score from challenge response body ────────────────────────────────
+function extractPxRiskScore(body, botVendor) {
+  if (botVendor !== 'px' || !body) return null;
+  var m = body.match(/"score"\s*:\s*(\d+)/);
+  if (m) return parseInt(m[1]);
+  // Some PX versions use _pxScore = N in inline JS
+  var m2 = body.match(/_pxScore\s*[=:]\s*(\d+)/);
+  return m2 ? parseInt(m2[1]) : null;
+}
+
+// ── Anonymity level from httpbin /get response body ───────────────────────────
+// Returns 'elite' | 'anonymous' | 'transparent' | null
+function detectAnonymityLevel(body) {
+  if (!body) return null;
+  try {
+    var s = body.indexOf('{'), e = body.lastIndexOf('}');
+    if (s === -1 || e === -1) return null;
+    var data = JSON.parse(body.slice(s, e + 1));
+    var hdrs = data.headers || {};
+    var keys = Object.keys(hdrs).map(function(k){ return k.toLowerCase(); });
+    if (keys.some(function(k){ return k === 'x-forwarded-for' || k === 'x-real-ip'; })) return 'transparent';
+    if (keys.some(function(k){ return k === 'via' || k === 'proxy-connection' || k === 'forwarded'; })) return 'anonymous';
+    return 'elite';
+  } catch(err) { return null; }
+}
+
+// ── Score config (score-config.json in DATA_DIR) ──────────────────────────────
+var DEFAULT_SCORE_WEIGHTS = { speed:20, reliability:15, target:35, ip_type:20, anti_bot:10 };
+var _scoreConfigCache = null;
+function loadScoreConfig() {
+  if (_scoreConfigCache) return _scoreConfigCache;
+  try {
+    _scoreConfigCache = JSON.parse(fs.readFileSync(path.join(DATA_DIR,'score-config.json'),'utf8'));
+    if (!_scoreConfigCache.weights) _scoreConfigCache.weights = Object.assign({}, DEFAULT_SCORE_WEIGHTS);
+  } catch(e) { _scoreConfigCache = { weights: Object.assign({}, DEFAULT_SCORE_WEIGHTS) }; }
+  return _scoreConfigCache;
+}
+function saveScoreConfig(cfg) {
+  _scoreConfigCache = cfg;
+  fs.writeFileSync(path.join(DATA_DIR,'score-config.json'), JSON.stringify(cfg, null, 2));
+}
+
 // ── TCP CONNECT timing — measures round-trip time through the proxy to target ──
 function tcpPingThrough(proxy, host, port, timeoutMs) {
   return new Promise(function(resolve) {
@@ -483,10 +580,18 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
       var httpStatus  = (extra && extra.http_status)  || 0;
       var headersRaw  = (extra && extra.headers_raw)  || '';
       var botVendor   = detectBotVendor(body, headersRaw, httpStatus);
+      var edgeCDN     = detectEdgeCDN(headersRaw);
+      var abCookies   = extractAntibotCookies(headersRaw);
+      var pxRiskScore = extractPxRiskScore(body, botVendor);
+      var h2Support   = (extra && extra.h2_support) || false;
       var respSize    = body ? body.length : 0;
       resolve(Object.assign({ ok, ms: Date.now() - start, body: body || null,
         bytes_sent: bytesSent || 0, bytes_received: bytesReceived || 0,
         px_challenge: px, http_status: httpStatus, bot_vendor: botVendor,
+        edge_cdn: edgeCDN,
+        antibot_cookies: abCookies.cookies, antibot_has_clearance: abCookies.has_clearance,
+        px_risk_score: pxRiskScore,
+        h2_support: h2Support,
         response_size: respSize }, extra || {}));
     }
 
@@ -530,12 +635,15 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
           }
 
           // Step 2: TLS handshake over the established tunnel
-          var tlsSock = tls.connect({ socket: sock, servername: targetHost, rejectUnauthorized: false });
+          // Include h2 in ALPN so we can detect if the endpoint supports HTTP/2
+          var tlsSock = tls.connect({ socket: sock, servername: targetHost, rejectUnauthorized: false,
+            ALPNProtocols: ['http/1.1', 'h2'] });
           tlsSock.setTimeout(timeoutMs);
           tlsSock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
           tlsSock.on('timeout', function() { tlsSock.destroy(); clearTimeout(timer); finish(false, null, bytesSent, bytesReceived); });
 
           tlsSock.on('secureConnect', function() {
+            var h2Support = (tlsSock.alpnProtocol === 'h2');
             // Detect SSL inspection: cert CN should match the target domain
             var cert = tlsSock.getPeerCertificate();
             var sslInspected = false;
@@ -567,7 +675,7 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
               var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
               var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
               if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
-              finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { ssl_inspected: sslInspected, http_status: status, headers_raw: headers });
+              finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { ssl_inspected: sslInspected, h2_support: h2Support, http_status: status, headers_raw: headers });
             });
           });
         });
@@ -677,11 +785,37 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
   var targetBotVendor    = null;
   var targetStatus       = null;
   var targetResponseSize = null;
+  var edgeCDN            = null;
+  var antibotCookies     = [];
+  var antibotHasClearance= false;
+  var pxRiskScore        = null;
+  var h2Support          = false;
   if (targetAttempts.length) {
     var tgtRef = goodTarget.length ? goodTarget[goodTarget.length - 1] : targetAttempts[targetAttempts.length - 1];
-    targetBotVendor    = tgtRef.bot_vendor    || null;
-    targetStatus       = tgtRef.http_status   || null;
+    targetBotVendor    = tgtRef.bot_vendor           || null;
+    targetStatus       = tgtRef.http_status          || null;
     targetResponseSize = tgtRef.response_size != null ? tgtRef.response_size : null;
+    edgeCDN            = tgtRef.edge_cdn             || null;
+    antibotCookies     = tgtRef.antibot_cookies      || [];
+    antibotHasClearance= tgtRef.antibot_has_clearance|| false;
+    pxRiskScore        = tgtRef.px_risk_score != null ? tgtRef.px_risk_score : null;
+    h2Support          = tgtRef.h2_support           || false;
+    // Try other attempts for edge CDN if last didn't have it
+    if (!edgeCDN) {
+      for (var ti = 0; ti < targetAttempts.length; ti++) {
+        if (targetAttempts[ti].edge_cdn) { edgeCDN = targetAttempts[ti].edge_cdn; break; }
+      }
+    }
+  }
+  // Anonymity level from httpbin /get response (echoes request headers)
+  var anonLevel = null;
+  if (goodHttpbin.length) {
+    anonLevel = detectAnonymityLevel(goodHttpbin[goodHttpbin.length - 1].body);
+  }
+  // H2 also detectable from ip-api or httpbin attempts if no target
+  if (!h2Support) {
+    var allAttempts = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts);
+    h2Support = allAttempts.some(function(a){ return a.h2_support; });
   }
 
   // Use ip-api latency as the primary timing signal
@@ -696,7 +830,10 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
              px_challenge:pxChallenge, edge_rtt:null,
              rotating:false, ssl_inspected:false,
              target_bot_vendor:targetBotVendor, target_status:targetStatus,
-             target_response_size:targetResponseSize };
+             target_response_size:targetResponseSize,
+             edge_cdn:edgeCDN, anon_level:anonLevel,
+             antibot_cookies:antibotCookies, antibot_has_clearance:antibotHasClearance,
+             px_risk_score:pxRiskScore, h2_support:h2Support };
   }
 
   var lats = goodIpapi.length ? goodIpapi.map(function(a){return a.ms;}) : goodHttpbin.map(function(a){return a.ms;});
@@ -724,22 +861,39 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
     } catch(e) { edgeRtt = null; }
   }
 
-  // Fork additive scoring formula
-  var score = 0;
-  if (targetTested && targetPass)  score += 50;
-  if (ipapiPass)                   score += 15;
-  if (httpbinPass)                 score += 10;
-  if (pxChallenge)                 score -= 30;
-  if (ipType === 'datacenter')     score -= 25;
-  if (isDcAsn)                     score -= 20;
-  // Latency bonus: +10 under 300ms, -10 over 800ms
-  if (avg <= 300)      score += 10;
-  else if (avg <= 500) score += 5;
-  else if (avg > 800)  score -= 10;
-  // Consistency bonus
-  if (rate >= 1.0)     score += 5;
-  else if (rate < 0.5) score -= 10;
-  // Clamp to 0..100
+  // Configurable weighted score
+  var scoreCfg = loadScoreConfig();
+  var w = scoreCfg.weights || DEFAULT_SCORE_WEIGHTS;
+  var wTotal = (w.speed||0) + (w.reliability||0) + (w.target||0) + (w.ip_type||0) + (w.anti_bot||0);
+  if (wTotal <= 0) wTotal = 100;
+
+  // Speed: 100 at ≤200ms → 0 at ≥2000ms (linear)
+  var speedScore = avg != null ? Math.max(0, Math.min(100, 100 - ((avg - 200) / 18))) : 50;
+
+  // Reliability: success rate (0–1) → 0–100
+  var reliabilityScore = Math.round(rate * 100);
+
+  // Target: 100 pass, 0 fail, 50 untested
+  var targetScore = !targetTested ? 50 : (targetPass ? 100 : 0);
+
+  // IP type quality
+  var IP_TYPE_SCORES = { residential:100, mobile:85, unknown:40, flagged_proxy:10, datacenter:5, private:0 };
+  var ipTypeScore = IP_TYPE_SCORES[ipType] !== undefined ? IP_TYPE_SCORES[ipType] : 40;
+  if (isDcAsn && ipTypeScore > 10) ipTypeScore = 10;
+
+  // Anti-bot: clearance cookie = good (proxy passed the challenge), tracked = neutral, blocked = bad
+  var antiBotScore = 100;
+  if (antibotHasClearance) {
+    antiBotScore = 90; // passed challenge
+  } else if (pxChallenge || targetBotVendor) {
+    antiBotScore = targetPass ? 35 : 0;
+  }
+
+  var score = Math.round(
+    ((w.speed||0) * speedScore + (w.reliability||0) * reliabilityScore
+     + (w.target||0) * targetScore + (w.ip_type||0) * ipTypeScore
+     + (w.anti_bot||0) * antiBotScore) / wTotal
+  );
   score = Math.max(0, Math.min(100, score));
 
   return {
@@ -763,6 +917,9 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
     rotating: rotating, ssl_inspected: sslInspected,
     target_bot_vendor: targetBotVendor, target_status: targetStatus,
     target_response_size: targetResponseSize,
+    edge_cdn: edgeCDN, anon_level: anonLevel,
+    antibot_cookies: antibotCookies, antibot_has_clearance: antibotHasClearance,
+    px_risk_score: pxRiskScore, h2_support: h2Support,
   };
 }
 
@@ -2201,6 +2358,36 @@ const server = http.createServer(async function(req,res){
     }catch(e){
       try{fs.unlinkSync(tmpZip);}catch(e2){}
       return jsonRes(res,{error:'Update failed: '+e.message},500);
+    }
+  }
+
+  // ── Score config ──────────────────────────────────────────────────────────
+  if(pathname==='/api/score-config'){
+    if(method==='GET'){
+      var sc=loadScoreConfig();
+      return jsonRes(res,{ weights:sc.weights||DEFAULT_SCORE_WEIGHTS, defaults:DEFAULT_SCORE_WEIGHTS });
+    }
+    if(method==='POST'){
+      var scBody=await readBody(req); var scData={};
+      try{scData=JSON.parse(scBody.toString());}catch(e){}
+      var sc2=loadScoreConfig();
+      if(scData.weights&&typeof scData.weights==='object'){
+        // Validate all keys are numbers ≥ 0
+        var valid=true;
+        ['speed','reliability','target','ip_type','anti_bot'].forEach(function(k){
+          if(scData.weights[k]!=null&&(isNaN(scData.weights[k])||scData.weights[k]<0)) valid=false;
+        });
+        if(!valid) return jsonRes(res,{error:'Invalid weights'},400);
+        sc2.weights=Object.assign({}, DEFAULT_SCORE_WEIGHTS, scData.weights);
+        _scoreConfigCache=null; // bust cache
+        saveScoreConfig(sc2);
+      }
+      if(scData.reset){
+        sc2.weights=Object.assign({},DEFAULT_SCORE_WEIGHTS);
+        _scoreConfigCache=null;
+        saveScoreConfig(sc2);
+      }
+      return jsonRes(res,{ok:true,weights:sc2.weights});
     }
   }
 

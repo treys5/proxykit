@@ -504,7 +504,7 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.12</span></div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.13</span></div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -1241,6 +1241,37 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
       <code id="analyticsClientId" style="color:var(--accent);font-size:10px;margin-left:6px">—</code>
     </div>
   </div>
+
+  <!-- ── Advanced: Score Equation ──────────────────────────────────────── -->
+  <details class="panel settings-section" id="scoreEquationSection">
+    <summary style="display:flex;align-items:center;padding:12px 16px;font-size:11px;font-weight:800;letter-spacing:.1em;color:var(--text);cursor:pointer;list-style:none;user-select:none;">
+      <span style="color:var(--accent);margin-right:8px">⬡</span> ADVANCED — SCORE EQUATION
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Adjust how proxy scores are calculated</span>
+    </summary>
+    <div style="padding:14px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.6">
+      Each factor contributes a <strong style="color:var(--text)">weighted percentage</strong> to the final 0–100 proxy score.
+      Drag sliders to reprioritise — e.g. set <em>Speed</em> to 80% if raw latency matters most.
+      Weights are normalised automatically so they always sum to 100%.
+    </div>
+
+    <div style="padding:0 16px 6px" id="scoreWeightRows">
+      <!-- rendered by renderScoreWeights() -->
+    </div>
+
+    <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted)">Total: <strong id="scoreWeightTotal" style="color:var(--accent)">100%</strong></span>
+      <span style="font-size:11px;color:var(--muted)" id="scoreWeightWarn"></span>
+      <button class="btn btn-out btn-sm" onclick="resetScoreWeights()" style="margin-left:auto">↺ RESET TO DEFAULTS</button>
+      <button class="btn btn-sm" onclick="saveScoreWeights()">SAVE</button>
+    </div>
+    <div style="padding:8px 16px 12px;font-size:10px;color:var(--muted);border-top:1px solid var(--border)">
+      <strong style="color:var(--text)">Speed</strong> — latency score (100 at ≤200ms → 0 at ≥2000ms) ·
+      <strong style="color:var(--text)">Reliability</strong> — % of successful attempts ·
+      <strong style="color:var(--text)">Target Pass</strong> — did the proxy reach your target URL ·
+      <strong style="color:var(--text)">IP Type</strong> — residential=100, mobile=85, unknown=40, DC=5 ·
+      <strong style="color:var(--text)">Anti-Bot</strong> — penalty for bot detections; bonus for clearance cookies
+    </div>
+  </details>
 
   <div class="panel settings-section">
     <div class="ph">⬡ DEBUG LOG
@@ -2240,8 +2271,14 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +(a.edge_rtt!=null?'<span class="ip-chip">'+a.edge_rtt+'ms edge</span>':'')
         +(a.rotating?'<span class="ip-chip warn">rotating</span>':'')
         +(a.ssl_inspected?'<span class="ip-chip bad">SSL inspect</span>':'')
-        +(a.target_bot_vendor?'<span class="ip-chip bad" style="color:'+vendorColor(a.target_bot_vendor)+'">'+esc(vendorLabel(a.target_bot_vendor))+'</span>'
+        +(a.h2_support?'<span class="ip-chip score" title="Target endpoint supports HTTP/2">H2</span>':'')
+        +(a.anon_level?'<span class="ip-chip" style="color:'+anonColor(a.anon_level)+'" title="Proxy anonymity level">'+anonLabel(a.anon_level)+'</span>':'')
+        +(a.edge_cdn?'<span class="ip-chip" style="color:'+cdnColor(a.edge_cdn)+'" title="Target edge CDN">'+esc(cdnLabel(a.edge_cdn))+'</span>':'')
+        +(a.target_bot_vendor?'<span class="ip-chip bad" style="color:'+vendorColor(a.target_bot_vendor)+'">'+esc(vendorLabel(a.target_bot_vendor))+(a.px_risk_score!=null?' ['+a.px_risk_score+']':'')+'</span>'
           :a.target_px?'<span class="ip-chip bad">PX challenge</span>':'')
+        +(a.antibot_has_clearance?'<span class="ip-chip score" title="Proxy received a challenge clearance cookie">✓ clearance</span>':'')
+        +((a.antibot_cookies&&a.antibot_cookies.length&&!a.antibot_has_clearance)?
+           '<span class="ip-chip warn" title="'+esc(a.antibot_cookies.map(function(c){return c.label;}).join(', '))+'">'+a.antibot_cookies.length+' bot cookie'+(a.antibot_cookies.length>1?'s':'')+'</span>':'')
         +(a.ip_info&&a.ip_info.mobile?'<span class="ip-chip score">mobile</span>':'')
         +(a.ip_info&&a.ip_info.hosting?'<span class="ip-chip bad">hosting</span>':'')
         +(a.ip_info&&a.ip_info.proxy?'<span class="ip-chip bad">proxy-flagged</span>':'')
@@ -2720,6 +2757,43 @@ var VENDOR_META={
 };
 function vendorLabel(v){ return (VENDOR_META[v]||{label:v}).label; }
 function vendorColor(v){ return (VENDOR_META[v]||{color:'#8090a8'}).color; }
+
+// ── Edge CDN meta ──────────────────────────────────────────────────────────
+var CDN_META={
+  cloudflare: {label:'Cloudflare CDN', color:'#f6821f'},
+  akamai:     {label:'Akamai',         color:'#009bde'},
+  cloudfront: {label:'AWS CloudFront', color:'#ff9900'},
+  fastly:     {label:'Fastly',         color:'#ff282d'},
+  azure:      {label:'Azure CDN',      color:'#0078d4'},
+  imperva:    {label:'Imperva CDN',    color:'#00bcd4'},
+  sucuri:     {label:'Sucuri',         color:'#3e8035'},
+  vercel:     {label:'Vercel Edge',    color:'#e6e6e6'},
+  bunnycdn:   {label:'BunnyCDN',       color:'#f5a623'},
+  varnish:    {label:'Varnish',        color:'#82b8d3'},
+};
+function cdnLabel(c){ return (CDN_META[c]||{label:c}).label; }
+function cdnColor(c){ return (CDN_META[c]||{color:'#8090a8'}).color; }
+
+// ── Anonymity level helpers ────────────────────────────────────────────────
+function anonLabel(lvl){
+  if(lvl==='elite')       return '⬡ Elite';
+  if(lvl==='anonymous')   return '⬡ Anonymous';
+  if(lvl==='transparent') return '⬡ Transparent';
+  return null;
+}
+function anonColor(lvl){
+  if(lvl==='elite')       return '#4caf50';
+  if(lvl==='anonymous')   return '#ff9800';
+  if(lvl==='transparent') return '#ef5350';
+  return '#8090a8';
+}
+
+// ── Antibot cookie type chip ───────────────────────────────────────────────
+function cookieTypeColor(type){
+  if(type==='clearance') return '#4caf50';
+  if(type==='device')    return '#ef5350';
+  return '#ff9800'; // tracking
+}
 
 function renderVendorBars(containerId, vendorCounts, totalTested){
   var el=document.getElementById(containerId);
@@ -3893,7 +3967,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.12';
+    var current='1.09.13';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3965,6 +4039,80 @@ async function installUpdate(){
   }
 }
 
+// ── Score equation ──────────────────────────────────────────────────────────
+var _scoreWeights = { speed:20, reliability:15, target:35, ip_type:20, anti_bot:10 };
+var SCORE_WEIGHT_META = [
+  { key:'speed',       label:'Speed',        desc:'Low-latency proxies score higher' },
+  { key:'reliability', label:'Reliability',  desc:'% of successful connection attempts' },
+  { key:'target',      label:'Target Pass',  desc:'Did the proxy reach your target URL?' },
+  { key:'ip_type',     label:'IP Type',      desc:'Residential > Mobile > Unknown > DC' },
+  { key:'anti_bot',    label:'Anti-Bot',     desc:'Penalty for detections; bonus for clearance cookies' },
+];
+
+async function loadScoreWeights(){
+  try{
+    var r=await fetch('/api/score-config',{cache:'no-store'});
+    if(r.ok){ var d=await r.json(); if(d.weights) _scoreWeights=d.weights; }
+  }catch(e){}
+  renderScoreWeights();
+}
+
+function renderScoreWeights(){
+  var wrap=document.getElementById('scoreWeightRows');
+  if(!wrap) return;
+  var html='';
+  SCORE_WEIGHT_META.forEach(function(m){
+    var val=_scoreWeights[m.key]||0;
+    html+='<div style="display:grid;grid-template-columns:130px 1fr 50px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">'
+      +'<div><div style="font-size:11px;font-weight:700;color:var(--text)">'+m.label+'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">'+m.desc+'</div></div>'
+      +'<input type="range" min="0" max="100" value="'+val+'" step="1"'
+      +' oninput="scoreWeightChanged(\''+m.key+'\',+this.value)"'
+      +' style="accent-color:var(--accent);cursor:pointer">'
+      +'<div style="font-size:13px;font-weight:700;color:var(--accent);font-family:var(--mono);text-align:right" id="swVal_'+m.key+'">'+val+'%</div>'
+      +'</div>';
+  });
+  wrap.innerHTML=html;
+  updateScoreWeightTotal();
+}
+
+function scoreWeightChanged(key, val){
+  _scoreWeights[key]=val;
+  var el=document.getElementById('swVal_'+key);
+  if(el) el.textContent=val+'%';
+  updateScoreWeightTotal();
+}
+
+function updateScoreWeightTotal(){
+  var total=Object.values(_scoreWeights).reduce(function(s,v){return s+(+v||0);},0);
+  var el=document.getElementById('scoreWeightTotal');
+  var warn=document.getElementById('scoreWeightWarn');
+  if(el) el.textContent=total+'%';
+  if(warn){
+    if(total===0) warn.textContent='⚠ All weights are zero';
+    else warn.textContent='';
+  }
+}
+
+async function saveScoreWeights(){
+  try{
+    var r=await fetch('/api/score-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({weights:_scoreWeights})});
+    var d=await r.json();
+    if(d.ok) showToast('Score equation saved');
+    else showToast('Save failed: '+(d.error||'unknown'));
+  }catch(e){ showToast('Save failed: '+e.message); }
+}
+
+async function resetScoreWeights(){
+  try{
+    var r=await fetch('/api/score-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({reset:true})});
+    var d=await r.json();
+    if(d.weights){ _scoreWeights=d.weights; renderScoreWeights(); showToast('Reset to defaults'); }
+  }catch(e){ showToast('Reset failed: '+e.message); }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────
 // Sync header version label from server (handles asar vs unpacked mismatch)
 fetch('/api/version',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
@@ -3979,6 +4127,7 @@ renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
 loadAnalyticsSettings();
+loadScoreWeights();
 dbgLog('Proxy Tester v1.09.12 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
