@@ -1411,6 +1411,7 @@ const server = http.createServer(async function(req,res){
       total:job.total,tested:job.tested,passed:job.passed,failed:job.failed,
       progress_pct:job.progress_pct,elapsed_sec:job.elapsed_sec,eta_sec:job.eta_sec,
       config:job.config,list_name:job.list_name,top_proxies_count:job.top_proxies.length,
+      data_usage:job.data_usage||null,
       ip_analysis:job.ip_analysis});
   }
 
