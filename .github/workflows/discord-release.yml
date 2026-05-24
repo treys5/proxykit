@@ -11,23 +11,30 @@ jobs:
       - name: Post release to Discord
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          RELEASE_TAG:  ${{ github.event.release.tag_name }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_URL:  ${{ github.event.release.html_url }}
-          RELEASE_BODY: ${{ github.event.release.body }}
-          REPO:         ${{ github.repository }}
+          RELEASE_TAG:   ${{ github.event.release.tag_name }}
+          RELEASE_NAME:  ${{ github.event.release.name }}
+          RELEASE_URL:   ${{ github.event.release.html_url }}
+          # toJSON wraps the value in a JSON string — handles newlines, backticks, quotes safely
+          RELEASE_BODY:  ${{ toJSON(github.event.release.body) }}
+          REPO:          ${{ github.repository }}
         run: |
           python3 << 'PYEOF'
-          import os, json, urllib.request
+          import os, json, urllib.request, urllib.error
 
           tag   = os.environ.get('RELEASE_TAG',  'unknown')
           name  = os.environ.get('RELEASE_NAME', tag)
           url   = os.environ.get('RELEASE_URL',  '')
-          body  = os.environ.get('RELEASE_BODY', '')
           repo  = os.environ.get('REPO', 'treys5/proxykit')
 
-          # Trim description to Discord embed limit
-          desc = body.strip()[:3000] or f'Proxy Tester {tag} is now available.'
+          # RELEASE_BODY is JSON-encoded by toJSON(), so decode it first
+          body_raw = os.environ.get('RELEASE_BODY', '""')
+          try:
+              body = json.loads(body_raw)
+          except Exception:
+              body = body_raw.strip('"')
+
+          # Trim to Discord embed description limit (4096 chars)
+          desc = (body or '').strip()[:4000] or f'Proxy Tester {tag} is now available.'
 
           download_url = (
               f'https://github.com/{repo}/releases/download/'
@@ -36,7 +43,6 @@ jobs:
 
           payload = {
               'username': 'Proxy Tester',
-              'avatar_url': 'https://raw.githubusercontent.com/treys5/proxykit/main/assets/icon.png',
               'embeds': [{
                   'title': f'🚀 Proxy Tester {tag} Released',
                   'description': desc,
@@ -48,23 +54,30 @@ jobs:
                           'inline': True,
                       },
                       {
-                          'name': '📋 Full Release Notes',
+                          'name': '📋 Release Notes',
                           'value': f'[View on GitHub]({url})',
                           'inline': True,
                       },
                   ],
                   'footer': {
-                      'text': 'Proxy Tester • Auto-Updater will notify active users'
+                      'text': 'Proxy Tester • Auto-Updater will notify active users',
                   },
               }],
           }
 
-          data = json.dumps(payload).encode('utf-8')
-          req  = urllib.request.Request(
-              os.environ['DISCORD_WEBHOOK_URL'],
+          data    = json.dumps(payload).encode('utf-8')
+          webhook = os.environ['DISCORD_WEBHOOK_URL'].strip()
+          req     = urllib.request.Request(
+              webhook,
               data=data,
               headers={'Content-Type': 'application/json'},
           )
-          with urllib.request.urlopen(req) as resp:
-              print(f'Discord: HTTP {resp.status}')
+
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  print(f'Discord: HTTP {resp.status} — announcement sent!')
+          except urllib.error.HTTPError as e:
+              body_err = e.read().decode('utf-8', errors='replace')
+              print(f'Discord error {e.code}: {body_err}')
+              raise
           PYEOF
