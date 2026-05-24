@@ -398,6 +398,8 @@ body.light-mode .ip-group-body{background:rgba(0,0,0,.04);}
 body.light-mode .heatmap-cell,body.light-mode .provider-metric,body.light-mode .stat{background:#f0f4fc;}
 body.light-mode .toast{background:#ffffff;color:var(--accent);}
 body.light-mode .ip-group{background:#ffffff;}
+body.light-mode #updateBanner{background:var(--surface);border-bottom-color:var(--accent);}
+body.light-mode #updateInstallBtn{color:#ffffff;}
 
 /* ── AI response panel ── */
 .ai-panel{border-top:1px solid var(--border);background:rgba(129,140,248,.03);}
@@ -513,12 +515,12 @@ body.light-mode .ip-group{background:#ffffff;}
 </nav>
 
 <!-- ── Update banner ─────────────────────────────────────────────────────── -->
-<div id="updateBanner" style="display:none;background:#1a1a2e;border-bottom:1px solid var(--accent);padding:7px 20px;align-items:center;gap:12px;">
-  <span style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em">UPDATE AVAILABLE</span>
-  <span id="updateBannerText" style="font-size:11px;color:var(--muted);flex:1"></span>
+<div id="updateBanner" style="display:none;background:var(--surface);border-bottom:2px solid var(--accent);padding:7px 20px;align-items:center;gap:12px;">
+  <span style="font-size:11px;color:var(--accent);font-weight:700;letter-spacing:.08em">🚀 UPDATE AVAILABLE</span>
+  <span id="updateBannerText" style="font-size:11px;color:var(--text);flex:1"></span>
   <span id="updateBannerStatus" style="font-size:11px;color:var(--accent);display:none"></span>
   <a id="updateBannerLink" href="#" target="_blank" style="font-size:11px;color:var(--muted);font-weight:500;text-decoration:none;padding:3px 6px;border-radius:var(--r-xs);">VIEW RELEASE</a>
-  <button id="updateInstallBtn" onclick="installUpdate()" style="font-size:11px;color:#0a0a0c;background:var(--accent);font-weight:700;border:none;cursor:pointer;padding:4px 12px;border-radius:var(--r-xs);letter-spacing:.06em">INSTALL UPDATE</button>
+  <button id="updateInstallBtn" onclick="installUpdate()" style="font-size:11px;color:#fff;background:var(--accent);font-weight:700;border:none;cursor:pointer;padding:4px 12px;border-radius:var(--r-xs);letter-spacing:.06em">INSTALL &amp; RESTART</button>
   <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
 </div>
 
@@ -3927,6 +3929,7 @@ async function installUpdate(){
   if(!_pendingUpdateUrl){ alert('No update URL found. Please update manually.'); return; }
   var btn=document.getElementById('updateInstallBtn');
   var statusEl=document.getElementById('updateBannerStatus');
+  var textEl=document.getElementById('updateBannerText');
   btn.disabled=true; btn.textContent='Downloading...';
   statusEl.style.display=''; statusEl.textContent='';
 
@@ -3939,12 +3942,24 @@ async function installUpdate(){
     var data=await r.json();
     if(!r.ok||!data.ok) throw new Error(data.error||('HTTP '+r.status));
 
+    // Files are updated — now auto-restart with countdown
     btn.style.display='none';
-    statusEl.textContent='✓ Updated to v'+data.version+' — restart to apply';
     statusEl.style.color='#4caf50';
-    document.getElementById('updateBannerText').textContent='Update applied! Close and relaunch Proxy Tester to use v'+data.version+'.';
+    var secs=3;
+    function tick(){
+      textEl.textContent='v'+data.version+' installed — restarting in '+secs+'s…';
+      statusEl.textContent='✓ Done';
+      if(secs<=0){
+        textEl.textContent='Restarting…';
+        fetch('/api/restart',{method:'POST'}).catch(function(){});
+        return;
+      }
+      secs--;
+      setTimeout(tick,1000);
+    }
+    tick();
   }catch(e){
-    btn.disabled=false; btn.textContent='INSTALL UPDATE';
+    btn.disabled=false; btn.textContent='INSTALL & RESTART';
     statusEl.textContent='✗ '+e.message;
     statusEl.style.color='#ef5350';
   }

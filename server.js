@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.10';
+const APP_VERSION = '1.09.11';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -2194,6 +2194,22 @@ const server = http.createServer(async function(req,res){
       try{fs.unlinkSync(tmpZip);}catch(e2){}
       return jsonRes(res,{error:'Update failed: '+e.message},500);
     }
+  }
+
+  // ── Restart (called after in-app update applied) ─────────────────────────
+  if(pathname==='/api/restart'&&method==='POST'){
+    jsonRes(res,{ok:true});
+    setTimeout(function(){
+      try{
+        var electron=require('electron');
+        electron.app.relaunch();
+        electron.app.quit();
+      }catch(e){
+        // Fallback for non-Electron / dev mode
+        process.exit(0);
+      }
+    },400);
+    return;
   }
 
   // ── AI Keys ────────────────────────────────────────────────────────────────
