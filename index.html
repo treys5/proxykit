@@ -429,7 +429,7 @@ body.light-mode .ip-group{background:#ffffff;}
 .res-lat-bar{flex:1;background:rgba(129,140,248,.35);border-radius:2px 2px 0 0;min-height:3px;position:relative;}
 .res-lat-bar:hover{background:rgba(129,140,248,.65);}
 .res-lat-lbl{font-size:8px;color:var(--muted);text-align:center;margin-top:3px;}
-/* PX section */
+/* Anti-bot / PX section */
 .px-section{border-top:2px solid rgba(239,83,80,.35);background:rgba(239,83,80,.03);}
 .px-section-hdr{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid rgba(239,83,80,.2);}
 .px-section-title{font-size:10px;font-weight:800;letter-spacing:.12em;color:#ef5350;}
@@ -443,6 +443,18 @@ body.light-mode .ip-group{background:#ffffff;}
 .px-isp-bar-fill{height:100%;border-radius:2px;background:#ef5350;}
 .px-isp-val{font-size:10px;font-family:var(--mono);color:var(--muted);width:40px;text-align:right;}
 .px-safe-badge{font-size:10px;padding:3px 9px;border-radius:999px;font-weight:700;letter-spacing:.05em;}
+/* Vendor breakdown bars */
+.px-vendor-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.px-vendor-label{font-size:11px;font-weight:700;width:90px;flex-shrink:0;}
+.px-vendor-bar-track{flex:1;height:7px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;}
+.px-vendor-bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.px-vendor-count{font-size:10px;font-family:var(--mono);color:var(--muted);width:48px;text-align:right;flex-shrink:0;}
+/* Status code mini-chart */
+.px-status-row{display:flex;align-items:flex-end;gap:5px;height:44px;padding:4px 0 0;}
+.px-status-bar-wrap{display:flex;flex-direction:column;align-items:center;flex:1;}
+.px-status-bar{width:100%;border-radius:2px 2px 0 0;}
+.px-status-lbl{font-size:8px;color:var(--muted);margin-top:3px;white-space:nowrap;}
+.px-sub-hdr{font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin:10px 0 5px;}
 /* ── Config test toggles ── */
 .test-toggle-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(36,46,66,.5);}
 .test-toggle-row:last-child{border-bottom:none;}
@@ -490,7 +502,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.6</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.7</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -755,21 +767,24 @@ body.light-mode .ip-group{background:#ffffff;}
       <div class="ai-panel-body" id="sessAiBody">Analyzing session...</div>
     </div>
 
-    <!-- ── SECTION 2: PX RISK ANALYSIS ──────────────────────────────────────── -->
+    <!-- ── SECTION 2: ANTI-BOT DETECTION ────────────────────────────────────── -->
     <div class="px-section" id="sessPxSection" style="display:none">
       <div class="px-section-hdr">
-        <span class="px-section-title">PX RISK ANALYSIS</span>
+        <span class="px-section-title">ANTI-BOT DETECTION</span>
         <span id="sessPxSub" style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px"></span>
       </div>
       <div class="px-grid">
         <div class="px-score-col">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">PX DETECT RATE</div>
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">BLOCK RATE</div>
           <div class="px-big" id="sessPxBig" style="color:#ef5350">—</div>
           <div id="sessPxRisk" style="font-size:10px;font-weight:700;letter-spacing:.08em;margin-top:2px"></div>
           <div id="sessPxSafe" style="margin-top:8px"></div>
+          <div id="sessPxStatusChart" style="margin-top:12px;width:100%;padding:0 4px"></div>
         </div>
         <div class="px-detail-col">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PX HIT RATE BY ISP</div>
+          <div class="px-sub-hdr">VENDOR BREAKDOWN</div>
+          <div id="sessPxVendorList"></div>
+          <div class="px-sub-hdr" style="margin-top:10px">HIT RATE BY ISP</div>
           <div id="sessPxIspList"></div>
           <div id="sessPxInterpret" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;border-top:1px solid rgba(255,255,255,.05);padding-top:10px"></div>
         </div>
@@ -926,21 +941,24 @@ body.light-mode .ip-group{background:#ffffff;}
       <div class="ai-panel-body" id="aiResponseBody">Analyzing your results...</div>
     </div>
 
-    <!-- ── SECTION 2: PX RISK ANALYSIS ─────────────────────────────────────── -->
+    <!-- ── SECTION 2: ANTI-BOT DETECTION ───────────────────────────────────── -->
     <div class="px-section" id="pxSection" style="display:none">
       <div class="px-section-hdr">
-        <span class="px-section-title">PX RISK ANALYSIS</span>
+        <span class="px-section-title">ANTI-BOT DETECTION</span>
         <span id="pxSectionSub" style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px"></span>
       </div>
       <div class="px-grid" id="pxContent">
         <div class="px-score-col">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">PX DETECT RATE</div>
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--muted)">BLOCK RATE</div>
           <div class="px-big" id="pxBigPct" style="color:#ef5350">—</div>
           <div id="pxRiskLabel" style="font-size:10px;font-weight:700;letter-spacing:.08em;margin-top:2px"></div>
           <div id="pxSafeBadge" style="margin-top:8px"></div>
+          <div id="pxStatusChart" style="margin-top:12px;width:100%;padding:0 4px"></div>
         </div>
         <div class="px-detail-col">
-          <div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:8px">PX HIT RATE BY ISP</div>
+          <div class="px-sub-hdr">VENDOR BREAKDOWN</div>
+          <div id="pxVendorList"></div>
+          <div class="px-sub-hdr" style="margin-top:10px">HIT RATE BY ISP</div>
           <div id="pxIspList"></div>
           <div id="pxInterpret" style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6;border-top:1px solid rgba(255,255,255,.05);padding-top:10px"></div>
         </div>
@@ -1946,38 +1964,61 @@ function renderSessOverview(s, ia, proxies, sjobs){
 
 function renderSessPxSection(sjobs, proxies){
   var pxEl=document.getElementById('sessPxSection');
-  // Aggregate PX data across all jobs in this session
-  var totalTested=0, totalPx=0, hasTarget=false;
+  // Aggregate across all jobs in session
+  var totalTested=0, hasTarget=false;
+  var aggVendorCounts={}, aggStatusCounts={}, aggPxCount=0;
   (sjobs||[]).forEach(function(j){
-    if(j.data_usage){
-      if(j.data_usage.target_tested>0) hasTarget=true;
-      totalTested+=j.data_usage.target_tested||j.data_usage.httpbin_tested||0;
-      totalPx+=j.data_usage.px_challenge_count||0;
-    }
+    if(!j.data_usage) return;
+    var du=j.data_usage;
+    if(du.target_tested>0) hasTarget=true;
+    totalTested+=du.target_tested||du.httpbin_tested||0;
+    aggPxCount+=du.px_challenge_count||0;
+    // Merge vendor_counts
+    Object.keys(du.vendor_counts||{}).forEach(function(k){
+      aggVendorCounts[k]=(aggVendorCounts[k]||0)+(du.vendor_counts[k]||0);
+    });
+    // Merge status_counts
+    Object.keys(du.status_counts||{}).forEach(function(k){
+      aggStatusCounts[k]=(aggStatusCounts[k]||0)+(du.status_counts[k]||0);
+    });
   });
   if(!hasTarget||totalTested===0){pxEl.style.display='none';return;}
   pxEl.style.display='';
 
-  var pxPct=totalTested>0?Math.round(totalPx/totalTested*1000)/10:0;
-  var pxColor=pxPct>=30?'#ef5350':pxPct>=10?'#ff9800':pxPct>0?'#ffcc00':'var(--accent)';
-  var riskLabel=pxPct>=30?'HIGH RISK':pxPct>=10?'ELEVATED':pxPct>0?'LOW RISK':'CLEAN';
-  document.getElementById('sessPxBig').textContent=pxPct+'%';
+  // Fall back to legacy PX count if no vendor data
+  var totalBlocked=Object.keys(aggVendorCounts).reduce(function(s,k){return s+(aggVendorCounts[k]||0);},0);
+  if(!totalBlocked&&aggPxCount){ aggVendorCounts={px:aggPxCount}; totalBlocked=aggPxCount; }
+
+  var blockPct=totalTested>0?Math.round(totalBlocked/totalTested*1000)/10:0;
+  var pxColor=blockPct>=30?'#ef5350':blockPct>=10?'#ff9800':blockPct>0?'#ffcc00':'var(--accent)';
+  var riskLabel=blockPct>=30?'HIGH RISK':blockPct>=10?'ELEVATED':blockPct>0?'LOW RISK':'CLEAN';
+
+  document.getElementById('sessPxBig').textContent=blockPct+'%';
   document.getElementById('sessPxBig').style.color=pxColor;
   document.getElementById('sessPxRisk').textContent=riskLabel;
   document.getElementById('sessPxRisk').style.color=pxColor;
-  document.getElementById('sessPxSub').textContent=totalPx+' PX hits across '+totalTested+' proxy tests';
 
-  var safePct=pxPct>0?(100-pxPct):100;
-  document.getElementById('sessPxSafe').innerHTML='<span class="px-safe-badge" style="background:rgba('+(pxPct<10?'76,175,80':'239,83,80')+',.12);color:'+(pxPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(pxPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+  var vendorNames=Object.keys(aggVendorCounts).filter(function(k){return aggVendorCounts[k]>0;});
+  var subText=vendorNames.length
+    ? vendorNames.map(function(k){return vendorLabel(k)+' ×'+aggVendorCounts[k];}).join(', ')
+    : totalBlocked+' blocks across '+sjobs.length+' run'+(sjobs.length>1?'s':'');
+  document.getElementById('sessPxSub').textContent=subText;
 
-  // Per-ISP from proxy data
+  var safePct=blockPct>0?Math.round(100-blockPct):100;
+  document.getElementById('sessPxSafe').innerHTML='<span class="px-safe-badge" style="background:rgba('+(blockPct<10?'76,175,80':'239,83,80')+',.12);color:'+(blockPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(blockPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+
+  // Vendor bars + status chart
+  renderVendorBars('sessPxVendorList', aggVendorCounts, totalTested);
+  renderStatusChart('sessPxStatusChart', aggStatusCounts);
+
+  // Per-ISP breakdown
   var ispMap={};
   (proxies||[]).forEach(function(p){
     if(!p.ip_info) return;
     var isp=p.ip_info.org||p.ip_info.isp||'Unknown';
     if(!ispMap[isp]) ispMap[isp]={total:0,px:0};
     ispMap[isp].total++;
-    if(p.target_px||p.px_challenge) ispMap[isp].px++;
+    if(p.target_bot_vendor||p.target_px||p.px_challenge) ispMap[isp].px++;
   });
   var ispArr=Object.keys(ispMap).map(function(k){return{isp:k,total:ispMap[k].total,px:ispMap[k].px,rate:ispMap[k].total>0?ispMap[k].px/ispMap[k].total:0};});
   ispArr.sort(function(a,b){return b.rate-a.rate||b.total-a.total;});
@@ -1993,13 +2034,14 @@ function renderSessPxSection(sjobs, proxies){
       +'<div style="font-size:9px;color:var(--muted);margin-left:4px">'+x.px+'/'+x.total+'</div></div>';
   }).join(''):'<div style="font-size:11px;color:var(--muted)">Not enough per-ISP data yet (need 3+ proxies per ISP)</div>';
 
+  var topVendor=vendorNames.sort(function(a,b){return (aggVendorCounts[b]||0)-(aggVendorCounts[a]||0);})[0];
   var interpret='';
-  if(pxPct===0) interpret='No PX challenges detected across all runs. This pool is performing clean on Walmart.';
-  else if(pxPct<10) interpret='Low PX rate across '+sjobs.length+' run'+(sjobs.length>1?'s':'')+'. Good pool for Walmart. Cull the '+totalPx+' flagged proxies via Elite Filter.';
-  else if(pxPct<30) interpret='Elevated PX rate. About 1 in '+Math.round(100/pxPct)+' proxies triggers PerimeterX. Check ISP breakdown — some ISPs may be dragging the average down.';
-  else interpret='High PX rate across all runs. This pool is largely blocked by PerimeterX. Consider a different provider or aggressive ISP filtering.';
+  if(blockPct===0) interpret='No anti-bot challenges detected across '+sjobs.length+' run'+(sjobs.length>1?'s':'')+'. Pool is performing clean.';
+  else if(blockPct<10) interpret='Low block rate across '+sjobs.length+' run'+(sjobs.length>1?'s':'')+'. Cull '+totalBlocked+' flagged proxies via Elite Filter.';
+  else if(blockPct<30) interpret='Elevated block rate. About 1 in '+Math.round(100/blockPct)+' proxies is challenged'+(topVendor?' by '+vendorLabel(topVendor):'')+'. Check ISP breakdown for worst offenders.';
+  else interpret='High block rate'+(topVendor?' — '+vendorLabel(topVendor)+' is aggressively blocking this pool':'')+'. Consider a different provider or aggressive filtering.';
   var safe=topIsps.filter(function(x){return x.rate<0.05;});
-  if(safe.length) interpret+=' Best-performing ISPs: '+safe.slice(0,3).map(function(x){return x.isp.split(' ')[0];}).join(', ')+'.';
+  if(safe.length) interpret+=' Best ISPs: '+safe.slice(0,3).map(function(x){return x.isp.split(' ')[0];}).join(', ')+'.';
   document.getElementById('sessPxInterpret').textContent=interpret;
 }
 
@@ -2152,10 +2194,12 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +(a.httpbin_pass===true?'<span class="ip-chip score">httpbin ✓</span>':a.httpbin_pass===false?'<span class="ip-chip bad">httpbin ✗</span>':'')
         +(a.target_pass===true?'<span class="ip-chip score">target ✓</span>':a.target_pass===false?'<span class="ip-chip bad">target ✗</span>':'')
         +(a.target_ms!=null?'<span class="ip-chip">'+(a.target_pass===false?'<s>':'')+a.target_ms+'ms tgt'+(a.target_pass===false?'</s>':'')+'</span>':'')
+        +(a.target_status&&a.target_status!==200?'<span class="ip-chip '+(a.target_status===403||a.target_status===429?'bad':'warn')+'">HTTP '+a.target_status+'</span>':'')
         +(a.edge_rtt!=null?'<span class="ip-chip">'+a.edge_rtt+'ms edge</span>':'')
         +(a.rotating?'<span class="ip-chip warn">rotating</span>':'')
         +(a.ssl_inspected?'<span class="ip-chip bad">SSL inspect</span>':'')
-        +(a.target_px?'<span class="ip-chip bad">PX challenge</span>':'')
+        +(a.target_bot_vendor?'<span class="ip-chip bad" style="color:'+vendorColor(a.target_bot_vendor)+'">'+esc(vendorLabel(a.target_bot_vendor))+'</span>'
+          :a.target_px?'<span class="ip-chip bad">PX challenge</span>':'')
         +(a.ip_info&&a.ip_info.mobile?'<span class="ip-chip score">mobile</span>':'')
         +(a.ip_info&&a.ip_info.hosting?'<span class="ip-chip bad">hosting</span>':'')
         +(a.ip_info&&a.ip_info.proxy?'<span class="ip-chip bad">proxy-flagged</span>':'')
@@ -2619,38 +2663,108 @@ function renderJobOverview(s, r){
   }
 }
 
+// ── Vendor color/label helpers ────────────────────────────────────────────────
+var VENDOR_META={
+  px:         {label:'PerimeterX', color:'#ef5350'},
+  akamai:     {label:'Akamai',     color:'#ff9800'},
+  cloudflare: {label:'Cloudflare', color:'#f6821f'},
+  datadome:   {label:'DataDome',   color:'#7c4dff'},
+  imperva:    {label:'Imperva',    color:'#00bcd4'},
+  block:      {label:'Generic Block', color:'#9e9e9e'},
+};
+function vendorLabel(v){ return (VENDOR_META[v]||{label:v}).label; }
+function vendorColor(v){ return (VENDOR_META[v]||{color:'#8090a8'}).color; }
+
+function renderVendorBars(containerId, vendorCounts, totalTested){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  var vc=vendorCounts||{};
+  var entries=Object.keys(vc).filter(function(k){return vc[k]>0;})
+    .map(function(k){return{v:k,cnt:vc[k],pct:totalTested>0?Math.round(vc[k]/totalTested*100):0};});
+  entries.sort(function(a,b){return b.cnt-a.cnt;});
+  if(!entries.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--muted)">No vendor signatures detected on target URL.</div>';
+    return;
+  }
+  var maxCnt=entries[0].cnt;
+  el.innerHTML=entries.map(function(e){
+    var col=vendorColor(e.v);
+    var bw=maxCnt>0?Math.round(e.cnt/maxCnt*100):0;
+    return '<div class="px-vendor-row">'
+      +'<div class="px-vendor-label" style="color:'+col+'">'+esc(vendorLabel(e.v))+'</div>'
+      +'<div class="px-vendor-bar-track"><div class="px-vendor-bar-fill" style="width:'+bw+'%;background:'+col+'"></div></div>'
+      +'<div class="px-vendor-count">'+e.cnt+' <span style="color:#5d7290">('+e.pct+'%)</span></div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderStatusChart(containerId, statusCounts){
+  var el=document.getElementById(containerId);
+  if(!el) return;
+  var sc=statusCounts||{};
+  var order=['2xx','3xx','403','429','4xx','5xx','other'];
+  var colorMap={'2xx':'var(--accent)','3xx':'var(--blue)','403':'#ef5350','429':'#ff9800','4xx':'#ff9f43','5xx':'#c084fc','other':'#5d7290'};
+  var bars=order.filter(function(k){return (sc[k]||0)>0;})
+    .map(function(k){return{k:k,v:sc[k]||0};});
+  if(!bars.length){el.innerHTML='';return;}
+  var maxV=Math.max.apply(null,bars.map(function(b){return b.v;}));
+  el.innerHTML='<div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);margin-bottom:6px">STATUS CODES</div>'
+    +'<div class="px-status-row">'+bars.map(function(b){
+      var h=maxV>0?Math.max(4,Math.round(b.v/maxV*36)):4;
+      var col=colorMap[b.k]||'#5d7290';
+      return '<div class="px-status-bar-wrap">'
+        +'<div class="px-status-bar" style="height:'+h+'px;background:'+col+'" title="'+b.v+' proxies"></div>'
+        +'<div class="px-status-lbl">'+b.k+'</div>'
+        +'</div>';
+    }).join('')+'</div>';
+}
+
 function renderJobPxSection(s, proxies){
   var du=s.data_usage||null;
   var hasTarget=du&&du.target_tested>0;
   var pxSection=document.getElementById('pxSection');
-
   if(!hasTarget){ pxSection.style.display='none'; return; }
   pxSection.style.display='';
 
-  var pxCnt=du.px_challenge_count||0;
-  var pxPct=du.px_challenge_pct||0;
   var tested=du.target_tested||du.httpbin_tested||s.total||1;
 
-  // Color by severity
-  var pxColor=pxPct>=30?'#ef5350':pxPct>=10?'#ff9800':pxPct>0?'#ffcc00':'var(--accent)';
-  var riskLabel=pxPct>=30?'HIGH RISK':pxPct>=10?'ELEVATED':pxPct>0?'LOW RISK':'CLEAN';
-  document.getElementById('pxBigPct').textContent=pxPct+'%';
-  document.getElementById('pxBigPct').style.color=pxColor;
+  // Block rate = any proxy that got a vendor hit or PX hit
+  var vendorCounts=du.vendor_counts||{};
+  var totalBlocked=Object.keys(vendorCounts).reduce(function(sum,k){return sum+(vendorCounts[k]||0);},0);
+  // Fall back to legacy px_challenge_count if no vendor data yet
+  var pxCnt=du.px_challenge_count||0;
+  if(!totalBlocked && pxCnt) { vendorCounts={px:pxCnt}; totalBlocked=pxCnt; }
+  var blockPct=tested>0?Math.round(totalBlocked/tested*1000)/10:0;
+
+  var blockColor=blockPct>=30?'#ef5350':blockPct>=10?'#ff9800':blockPct>0?'#ffcc00':'var(--accent)';
+  var riskLabel=blockPct>=30?'HIGH RISK':blockPct>=10?'ELEVATED':blockPct>0?'LOW RISK':'CLEAN';
+  document.getElementById('pxBigPct').textContent=blockPct+'%';
+  document.getElementById('pxBigPct').style.color=blockColor;
   document.getElementById('pxRiskLabel').textContent=riskLabel;
-  document.getElementById('pxRiskLabel').style.color=pxColor;
-  document.getElementById('pxSectionSub').textContent='Target URL tested — '+pxCnt+' of '+(s.total||'?')+' proxies triggered PX';
+  document.getElementById('pxRiskLabel').style.color=blockColor;
 
-  var safePct=pxPct>0?(100-pxPct):100;
-  document.getElementById('pxSafeBadge').innerHTML='<span class="px-safe-badge" style="background:rgba('+(pxPct<10?'76,175,80':'239,83,80')+',.12);color:'+(pxPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(pxPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+  var vendorNames=Object.keys(vendorCounts).filter(function(k){return vendorCounts[k]>0;});
+  var subText=vendorNames.length
+    ? vendorNames.map(function(k){return vendorLabel(k)+' ×'+vendorCounts[k];}).join(', ')
+    : totalBlocked+' blocks detected';
+  document.getElementById('pxSectionSub').textContent='Target tested — '+subText;
 
-  // Per-ISP PX breakdown
+  var safePct=blockPct>0?Math.round(100-blockPct):100;
+  document.getElementById('pxSafeBadge').innerHTML='<span class="px-safe-badge" style="background:rgba('+(blockPct<10?'76,175,80':'239,83,80')+',.12);color:'+(blockPct<10?'var(--accent)':'#ef5350')+';border:1px solid '+(blockPct<10?'rgba(76,175,80,.3)':'rgba(239,83,80,.3)')+'">'+safePct+'% SAFE</span>';
+
+  // Vendor bars
+  renderVendorBars('pxVendorList', vendorCounts, tested);
+  // Status code chart
+  renderStatusChart('pxStatusChart', du.status_counts||{});
+
+  // Per-ISP breakdown (uses any bot signal on proxy)
   var ispMap={};
   proxies.forEach(function(p){
     if(!p.ip_info) return;
     var isp=p.ip_info.org||p.ip_info.isp||'Unknown';
     if(!ispMap[isp]) ispMap[isp]={total:0,px:0};
     ispMap[isp].total++;
-    if(p.target_px||p.px_challenge) ispMap[isp].px++;
+    if(p.target_bot_vendor||p.target_px||p.px_challenge) ispMap[isp].px++;
   });
   var ispArr=Object.keys(ispMap).map(function(k){return{isp:k,total:ispMap[k].total,px:ispMap[k].px,rate:ispMap[k].total>0?ispMap[k].px/ispMap[k].total:0};});
   ispArr.sort(function(a,b){return b.rate-a.rate||b.total-a.total;});
@@ -2666,14 +2780,15 @@ function renderJobPxSection(s, proxies){
       +'<div class="px-isp-val" style="color:'+col+'">'+pct+'%</div>'
       +'<div style="font-size:9px;color:var(--muted);margin-left:4px">'+x.px+'/'+x.total+'</div>'
       +'</div>';
-  }).join(''):'<div style="font-size:11px;color:var(--muted)">Not enough data per-ISP (need 3+ proxies per ISP)</div>';
+  }).join(''):'<div style="font-size:11px;color:var(--muted)">Not enough per-ISP data (need 3+ proxies per ISP)</div>';
 
-  // Interpretation text
+  // Interpretation
+  var topVendor=vendorNames.sort(function(a,b){return (vendorCounts[b]||0)-(vendorCounts[a]||0);})[0];
   var interpret='';
-  if(pxPct===0) interpret='No PX challenges detected. This pool appears safe for Walmart and other PerimeterX-protected sites.';
-  else if(pxPct<10) interpret='Low PX rate. Most proxies pass Walmart. Consider culling the '+pxCnt+' flagged proxies using Elite Filter (Exclude PX hits).';
-  else if(pxPct<30) interpret='Elevated PX rate. About 1 in '+(Math.round(100/pxPct))+' proxies triggers PerimeterX. Residential quality may be mixed — check ISP breakdown above for the worst offenders.';
-  else interpret='High PX rate. This pool is largely blocked by PerimeterX. '+(topIsps.length?'The worst performing ISPs are listed above. ':'')+'Consider using a different provider or filtering aggressively.';
+  if(blockPct===0) interpret='No anti-bot challenges detected on target URL. This pool is performing clean.';
+  else if(blockPct<10) interpret='Low block rate ('+(totalBlocked)+' hits). Pool is mostly passing. Cull flagged proxies via Elite Filter.';
+  else if(blockPct<30) interpret='Elevated block rate. About 1 in '+Math.round(100/blockPct)+' proxies is being challenged'+(topVendor?' by '+vendorLabel(topVendor):'')+'. Check ISP breakdown for worst offenders.';
+  else interpret='High block rate. This pool is largely blocked'+(topVendor?' by '+vendorLabel(topVendor):'')+'. Consider a different proxy provider or aggressive ISP filtering.';
   if(topIsps.length){
     var safe=topIsps.filter(function(x){return x.rate<0.05;});
     if(safe.length) interpret+=' Best ISPs: '+safe.slice(0,3).map(function(x){return x.isp.split(' ')[0];}).join(', ')+'.';
@@ -3732,7 +3847,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.6';
+    var current='1.09.7';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3799,7 +3914,7 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.09.6 started');
+dbgLog('Proxy Tester v1.09.7 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){

@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.6';
+const APP_VERSION = '1.09.7';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -187,6 +187,28 @@ const PX_MARKERS = [
   '_pxhd', 'px-captcha', 'press & hold', '_pxde', 'pxchallenge',
   'px.init', 'perimeterx', '_px2', 'pxi/', 'human challenge',
 ];
+
+// ── Anti-bot vendor detection markers ────────────────────────────────────────
+const AKAMAI_MARKERS   = ['_abck', 'akamai_pixel', '/akam/', 'ak_bmsc', 'sensor_data', 'bm_sz', 'akamaibox'];
+const CF_MARKERS       = ['cf-ray', '__cf_bm', 'cloudflare', 'cf_clearance', 'ray id', 'cf-mitigated'];
+const DATADOME_MARKERS = ['datadome', 'dd_referrer', 'dd_cookie', 'ddos-guard'];
+const IMPERVA_MARKERS  = ['incapsula', 'incap_ses', 'visid_incap', 'reese84', 'x-iinfo'];
+const BLOCK_KEYWORDS   = ['access denied', 'bot detected', 'unusual traffic', 'automated queries',
+                          'please verify', 'security check', 'captcha', 'blocked'];
+
+function detectBotVendor(body, headers, statusCode) {
+  var bl = (body    || '').toLowerCase();
+  var hl = (headers || '').toLowerCase();
+  if (PX_MARKERS.some(function(m){      return bl.includes(m); }))                     return 'px';
+  if (AKAMAI_MARKERS.some(function(m){  return bl.includes(m) || hl.includes(m); }))   return 'akamai';
+  if (CF_MARKERS.some(function(m){      return bl.includes(m) || hl.includes(m); }))   return 'cloudflare';
+  if (DATADOME_MARKERS.some(function(m){return bl.includes(m); }))                     return 'datadome';
+  if (IMPERVA_MARKERS.some(function(m){ return bl.includes(m) || hl.includes(m); }))   return 'imperva';
+  if ((statusCode === 403 || statusCode === 429) &&
+      BLOCK_KEYWORDS.some(function(k){ return bl.includes(k); }))                      return 'block';
+  if (statusCode === 403 || statusCode === 429)                                         return 'block';
+  return null;
+}
 
 // Always-on parallel test URLs (in addition to ip-api and optional target)
 const HTTPBIN_URL = 'http://httpbin.org/ip';
@@ -363,16 +385,16 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
     function finish(ok, body, bytesSent, bytesReceived, extra) {
       if (settled) return;
       settled = true;
-      var px = false;
-      if (body) {
-        var bl = body.toLowerCase();
-        for (var pi = 0; pi < PX_MARKERS.length; pi++) {
-          if (bl.includes(PX_MARKERS[pi])) { px = true; break; }
-        }
-      }
+      var bl = body ? body.toLowerCase() : '';
+      var px = PX_MARKERS.some(function(m){ return bl.includes(m); });
+      var httpStatus  = (extra && extra.http_status)  || 0;
+      var headersRaw  = (extra && extra.headers_raw)  || '';
+      var botVendor   = detectBotVendor(body, headersRaw, httpStatus);
+      var respSize    = body ? body.length : 0;
       resolve(Object.assign({ ok, ms: Date.now() - start, body: body || null,
         bytes_sent: bytesSent || 0, bytes_received: bytesReceived || 0,
-        px_challenge: px }, extra || {}));
+        px_challenge: px, http_status: httpStatus, bot_vendor: botVendor,
+        response_size: respSize }, extra || {}));
     }
 
     var parsed     = new URL(testUrl);
@@ -452,7 +474,7 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
               var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
               var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
               if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
-              finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { ssl_inspected: sslInspected });
+              finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { ssl_inspected: sslInspected, http_status: status, headers_raw: headers });
             });
           });
         });
@@ -477,7 +499,7 @@ function testProxyOnce(proxy, testUrl, timeoutMs) {
           var headers = headerEnd >= 0 ? raw.slice(0, headerEnd) : '';
           var body    = headerEnd >= 0 ? raw.slice(headerEnd + 4) : '';
           if (/transfer-encoding:\s*chunked/i.test(headers)) body = decodeChunked(body);
-          finish(status >= 200 && status < 500, body, bytesSent, bytesReceived);
+          finish(status >= 200 && status < 500, body, bytesSent, bytesReceived, { http_status: status, headers_raw: headers });
         });
         sock.on('error', function() { clearTimeout(timer); finish(false, null, bytesSent, 0); });
       }
@@ -558,6 +580,17 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
   var targetMs = (targetTested && goodTarget.length)
     ? Math.round(goodTarget.reduce(function(s,a){return s+a.ms;},0) / goodTarget.length) : null;
 
+  // Anti-bot: use last good target attempt (or last attempt if all failed)
+  var targetBotVendor    = null;
+  var targetStatus       = null;
+  var targetResponseSize = null;
+  if (targetAttempts.length) {
+    var tgtRef = goodTarget.length ? goodTarget[goodTarget.length - 1] : targetAttempts[targetAttempts.length - 1];
+    targetBotVendor    = tgtRef.bot_vendor    || null;
+    targetStatus       = tgtRef.http_status   || null;
+    targetResponseSize = tgtRef.response_size != null ? tgtRef.response_size : null;
+  }
+
   // Use ip-api latency as the primary timing signal
   var allGood = goodIpapi.concat(goodHttpbin);
   if (!allGood.length) {
@@ -568,7 +601,9 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
              httpbin_pass:skipHttpbin?null:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
              bytes_sent:totalBytesSent, bytes_received:totalBytesRecv,
              px_challenge:pxChallenge, edge_rtt:null,
-             rotating:false, ssl_inspected:false };
+             rotating:false, ssl_inspected:false,
+             target_bot_vendor:targetBotVendor, target_status:targetStatus,
+             target_response_size:targetResponseSize };
   }
 
   var lats = goodIpapi.length ? goodIpapi.map(function(a){return a.ms;}) : goodHttpbin.map(function(a){return a.ms;});
@@ -633,6 +668,8 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
     bytes_sent: totalBytesSent, bytes_received: totalBytesRecv,
     px_challenge: pxChallenge, edge_rtt: edgeRtt,
     rotating: rotating, ssl_inspected: sslInspected,
+    target_bot_vendor: targetBotVendor, target_status: targetStatus,
+    target_response_size: targetResponseSize,
   };
 }
 
@@ -652,6 +689,20 @@ async function runJob(jobId, proxies, config) {
       job.tested = completed;
       if (r.status === 'pass') job.passed++; else job.failed++;
       if (r.px_challenge) job.px_challenge_count = (job.px_challenge_count || 0) + 1;
+      if (r.target_bot_vendor) {
+        job.vendor_counts = job.vendor_counts || {};
+        job.vendor_counts[r.target_bot_vendor] = (job.vendor_counts[r.target_bot_vendor] || 0) + 1;
+      }
+      if (r.target_status) {
+        job.status_counts = job.status_counts || {};
+        var sc = r.target_status >= 200 && r.target_status < 300 ? '2xx' :
+                 r.target_status >= 300 && r.target_status < 400 ? '3xx' :
+                 r.target_status === 403 ? '403' :
+                 r.target_status === 429 ? '429' :
+                 r.target_status >= 400  && r.target_status < 500 ? '4xx' :
+                 r.target_status >= 500  ? '5xx' : 'other';
+        job.status_counts[sc] = (job.status_counts[sc] || 0) + 1;
+      }
       if (r.httpbin_pass !== undefined) {
         job.httpbin_tested = (job.httpbin_tested || 0) + 1;
         if (r.httpbin_pass) job.httpbin_passed = (job.httpbin_passed || 0) + 1;
@@ -684,6 +735,8 @@ async function runJob(jobId, proxies, config) {
     target_tested:       job.target_tested  || 0,
     target_passed:       job.target_passed  || 0,
     target_pass_pct:     job.target_tested  > 0 ? Math.round((job.target_passed || 0) / job.target_tested * 1000) / 10 : null,
+    vendor_counts:       job.vendor_counts  || {},
+    status_counts:       job.status_counts  || {},
   };
 
   const passed = results.filter(function(r){ return r && r.status==='pass'; });
