@@ -22,7 +22,7 @@ Write-Host "  PROXY TESTER" -ForegroundColor Cyan
 Write-Host "  ============================================" -ForegroundColor DarkGray
 Write-Host ""
 
-# ── Pick npm ──────────────────────────────────────────────────────────────────
+# -- Pick npm ------------------------------------------------------------------
 $SysNpm = (Get-Command npm -ErrorAction SilentlyContinue)
 if ($SysNpm) {
     $NpmExe = $SysNpm.Source
@@ -41,7 +41,7 @@ if (-not (Test-Path $Server)) {
     exit 1
 }
 
-# ── Read local version ────────────────────────────────────────────────────────
+# -- Read local version --------------------------------------------------------
 function Get-LocalVersion {
     if (Test-Path $VersionFile) {
         try {
@@ -57,7 +57,7 @@ function Get-LocalVersion {
     return "0.0.0"
 }
 
-# ── Compare semantic versions (returns 1 if $a > $b, -1 if $a < $b, 0 equal) ─
+# -- Compare semantic versions (returns 1 if $a > $b, -1 if $a < $b, 0 equal) -
 function Compare-SemVer([string]$a, [string]$b) {
     $pa = ($a -replace '[^0-9.]','').Split('.') | ForEach-Object { [int]$_ }
     $pb = ($b -replace '[^0-9.]','').Split('.') | ForEach-Object { [int]$_ }
@@ -70,7 +70,7 @@ function Compare-SemVer([string]$a, [string]$b) {
     return 0
 }
 
-# ── Download file with progress ───────────────────────────────────────────────
+# -- Download file with progress -----------------------------------------------
 function Get-FileWithProgress([string]$Uri, [string]$OutFile) {
     $wc = New-Object System.Net.WebClient
     $wc.Headers.Add("User-Agent", "ProxyTester-Updater")
@@ -91,7 +91,7 @@ function Get-FileWithProgress([string]$Uri, [string]$OutFile) {
     Write-Host ""
 }
 
-# ── Apply update: extract zip and copy source files over ─────────────────────
+# -- Apply update: extract zip and copy source files over ----------------------
 function Install-Update([string]$ZipPath, [string]$TargetDir) {
     $TmpDir = Join-Path $env:TEMP "ProxyTesterUpdate_$(Get-Random)"
     try {
@@ -100,7 +100,6 @@ function Install-Update([string]$ZipPath, [string]$TargetDir) {
         [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $TmpDir)
 
         # The zip may have a single top-level folder (GitHub archive style)
-        # Find the actual content root
         $children = Get-ChildItem $TmpDir
         $SrcDir = $TmpDir
         if ($children.Count -eq 1 -and $children[0].PSIsContainer) {
@@ -132,7 +131,7 @@ function Install-Update([string]$ZipPath, [string]$TargetDir) {
     }
 }
 
-# ── Auto-update check ─────────────────────────────────────────────────────────
+# -- Auto-update check ---------------------------------------------------------
 if (-not $SkipUpdateCheck) {
     $LocalVersion = Get-LocalVersion
     Write-Host "  Version: $LocalVersion" -ForegroundColor DarkGray
@@ -147,7 +146,7 @@ if (-not $SkipUpdateCheck) {
 
         if ((Compare-SemVer $LatestVersion $LocalVersion) -gt 0) {
             Write-Host ""
-            Write-Host "  UPDATE AVAILABLE: v$LocalVersion  →  v$LatestVersion" -ForegroundColor Cyan
+            Write-Host "  UPDATE AVAILABLE: v$LocalVersion -> v$LatestVersion" -ForegroundColor Cyan
             Write-Host "  $($json.name)" -ForegroundColor White
             Write-Host ""
 
@@ -170,25 +169,24 @@ if (-not $SkipUpdateCheck) {
                     Write-Host ""
                     Write-Host "  Relaunching with updated version..." -ForegroundColor Green
                     Start-Sleep -Seconds 1
-                    # Relaunch this same script (now updated) and exit
                     $newScript = Join-Path $AppDir "ProxyTester.ps1"
                     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$newScript`" -Port $Port -SkipUpdateCheck"
                     exit 0
                 }
             } else {
-                Write-Host "  Skipping update — launching current version." -ForegroundColor DarkGray
+                Write-Host "  Skipping update - launching current version." -ForegroundColor DarkGray
             }
             Write-Host ""
         } else {
             Write-Host "  Up to date." -ForegroundColor DarkGray
         }
     } catch {
-        # Network or parse error — just continue launching
+        # Network or parse error - just continue launching
         Write-Host "  Update check failed (offline?): $($_.Exception.Message)" -ForegroundColor DarkGray
     }
 }
 
-# ── First-time Electron setup ─────────────────────────────────────────────────
+# -- First-time Electron setup -------------------------------------------------
 $CanLaunchElectron = (Test-Path $MainJs) -and (Test-Path $PkgJson)
 
 if ($CanLaunchElectron -and (-not (Test-Path $ElectronExe))) {
@@ -246,7 +244,7 @@ if ($CanLaunchElectron -and (-not (Test-Path $ElectronExe))) {
     Write-Host ""
 }
 
-# ── Launch ────────────────────────────────────────────────────────────────────
+# -- Launch --------------------------------------------------------------------
 $env:PORT = $Port
 
 if ($CanLaunchElectron -and (Test-Path $ElectronExe)) {
