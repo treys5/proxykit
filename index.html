@@ -504,7 +504,7 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.10</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.12</span></div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -3893,7 +3893,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.10';
+    var current='1.09.12';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3966,6 +3966,11 @@ async function installUpdate(){
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
+// Sync header version label from server (handles asar vs unpacked mismatch)
+fetch('/api/version',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+  if(d&&d.version) document.getElementById('appVersionLabel').textContent='v'+d.version;
+}).catch(function(){});
+
 updateSavedTab();
 startPolling();
 loadSessionGroups();
@@ -3974,7 +3979,7 @@ renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
 loadAnalyticsSettings();
-dbgLog('Proxy Tester v1.09.10 started');
+dbgLog('Proxy Tester v1.09.12 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){

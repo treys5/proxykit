@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.11';
+const APP_VERSION = '1.09.12';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -2169,12 +2169,20 @@ const server = http.createServer(async function(req,res){
       if(entries.length===1&&fs.statSync(path.join(extracted,entries[0])).isDirectory()){
         srcDir=path.join(extracted,entries[0]);
       }
-      // Copy source files into __dirname
+      // Determine write target:
+      // If running packed inside an app.asar, write to resources/app/ next to it.
+      // Electron loads resources/app/ in preference to resources/app.asar on restart,
+      // so the updated loose files take over cleanly without touching the sealed archive.
+      var isAsar=__dirname.indexOf('app.asar')!==-1;
+      var targetDir=isAsar?path.join(process.resourcesPath,'app'):__dirname;
+      if(!fs.existsSync(targetDir)) fs.mkdirSync(targetDir,{recursive:true});
+
+      // Copy source files into target directory
       var FILES=['server.js','index.html','main.js','package.json','ProxyTester.ps1','version.json'];
       var updated=[];
       FILES.forEach(function(f){
         var src=path.join(srcDir,f);
-        var dst=path.join(__dirname,f);
+        var dst=path.join(targetDir,f);
         if(fs.existsSync(src)){
           fs.copyFileSync(src,dst);
           updated.push(f);
