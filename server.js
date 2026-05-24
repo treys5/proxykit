@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.5';
+const APP_VERSION = '1.09.6';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -718,7 +718,7 @@ async function runJob(jobId, proxies, config) {
 
   if (job.session_id && sessions[job.session_id]) mergeRunIntoSession(job.session_id, jobId, results);
   fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
-  fs.writeFileSync(path.join(__dirname,'results',jobId+'.json'),
+  fs.writeFileSync(path.join(DATA_DIR,'results',jobId+'.json'),
     JSON.stringify({job_id:jobId,config,completed_at:new Date().toISOString(),
       stats:{total,passed:job.passed,failed:job.failed},
       data_usage:job.data_usage,
@@ -908,7 +908,7 @@ function mergeRunIntoSession(sessionId, jobId, results) {
   );
 
   fs.mkdirSync(path.join(DATA_DIR,'results'),{recursive:true});
-  fs.writeFileSync(path.join(__dirname,'results','session_'+sessionId+'.json'),
+  fs.writeFileSync(path.join(DATA_DIR,'results','session_'+sessionId+'.json'),
     JSON.stringify({session_id:sessionId,config:s.config,run_count:s.run_count,
       run_ids:s.run_ids,updated_at:s.updated_at,ip_analysis:s.ip_analysis,
       best_proxies:s.best_proxies},null,2));
@@ -1593,13 +1593,13 @@ const server = http.createServer(async function(req,res){
     }
     if(sub==='/export'&&method==='GET'){
       if(job.status!=='done') return jsonRes(res,{error:'Not complete'},400);
-      const p=path.join(__dirname,'results',jobId+'.json');
+      const p=path.join(DATA_DIR,'results',jobId+'.json');
       if(fs.existsSync(p)){res.writeHead(200,{'Content-Type':'application/json','Content-Disposition':'attachment; filename="proxies_'+jobId+'.json"'});return fs.createReadStream(p).pipe(res);}
       res.writeHead(404); return res.end('File not found');
     }
     if(method==='DELETE'){
       delete jobs[jobId];
-      const p=path.join(__dirname,'results',jobId+'.json');
+      const p=path.join(DATA_DIR,'results',jobId+'.json');
       if(fs.existsSync(p))fs.unlinkSync(p);
       return jsonRes(res,{deleted:jobId});
     }
@@ -1974,7 +1974,7 @@ const server = http.createServer(async function(req,res){
     if(method==='DELETE'){
       s.run_ids.forEach(function(jid){delete jobs[jid];});
       delete sessions[sid];
-      const fp=path.join(__dirname,'results','session_'+sid+'.json');
+      const fp=path.join(DATA_DIR,'results','session_'+sid+'.json');
       if(fs.existsSync(fp))fs.unlinkSync(fp);
       return jsonRes(res,{deleted:sid});
     }
