@@ -9,7 +9,7 @@ const path = require('path');
 const url  = require('url');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09';
+const APP_VERSION = '1.09.1';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -494,29 +494,36 @@ function parseIpApiResponse(body) {
   } catch (e) { return null; }
 }
 
-async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
+async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttpbin) {
   var ipapiAttempts = [], httpbinAttempts = [], targetAttempts = [];
   var totalBytesSent = 0, totalBytesRecv = 0;
 
   for (var i = 0; i < retries; i++) {
-    // Always run ip-api + httpbin in parallel; optionally add target
-    var tasks = [
-      testProxyOnce(proxy, testUrl, timeoutMs),      // ip-api
-      testProxyOnce(proxy, HTTPBIN_URL, timeoutMs),  // httpbin
-    ];
-    if (targetUrl) tasks.push(testProxyOnce(proxy, targetUrl, timeoutMs));
+    // Build task list dynamically so httpbin can be skipped
+    var taskDefs = [{ key:'ipapi', url:testUrl }];
+    if (!skipHttpbin) taskDefs.push({ key:'httpbin', url:HTTPBIN_URL });
+    if (targetUrl)    taskDefs.push({ key:'target',  url:targetUrl   });
 
-    var results = await Promise.all(tasks);
-    var ipapi   = results[0];
-    var httpbin = results[1];
-    var tgt     = targetUrl ? results[2] : null;
+    var taskResults = await Promise.all(taskDefs.map(function(td){
+      return testProxyOnce(proxy, td.url, timeoutMs);
+    }));
+    var byKey = {};
+    taskDefs.forEach(function(td, idx){ byKey[td.key] = taskResults[idx]; });
+
+    var ipapi   = byKey.ipapi;
+    var httpbin = byKey.httpbin || null;
+    var tgt     = byKey.target  || null;
 
     ipapiAttempts.push(ipapi);
-    httpbinAttempts.push(httpbin);
-    if (tgt) targetAttempts.push(tgt);
+    if (httpbin) httpbinAttempts.push(httpbin);
+    if (tgt)     targetAttempts.push(tgt);
 
-    totalBytesSent += (ipapi.bytes_sent||0) + (httpbin.bytes_sent||0) + (tgt ? (tgt.bytes_sent||0) : 0);
-    totalBytesRecv += (ipapi.bytes_received||0) + (httpbin.bytes_received||0) + (tgt ? (tgt.bytes_received||0) : 0);
+    totalBytesSent += (ipapi.bytes_sent||0)
+      + (httpbin ? (httpbin.bytes_sent||0)    : 0)
+      + (tgt     ? (tgt.bytes_sent||0)        : 0);
+    totalBytesRecv += (ipapi.bytes_received||0)
+      + (httpbin ? (httpbin.bytes_received||0) : 0)
+      + (tgt     ? (tgt.bytes_received||0)     : 0);
   }
 
   var goodIpapi   = ipapiAttempts.filter(function(a){ return a.ok; });
@@ -524,7 +531,8 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
   var goodTarget  = targetAttempts.filter(function(a){ return a.ok; });
 
   var ipapiPass   = goodIpapi.length > 0;
-  var httpbinPass = goodHttpbin.length > 0;
+  // null when skipped, true/false when tested
+  var httpbinPass = skipHttpbin ? null : (goodHttpbin.length > 0);
   var targetTested = targetAttempts.length > 0;
   var targetPass   = targetTested ? goodTarget.length > 0 : null;
 
@@ -553,7 +561,7 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl) {
              username:proxy.username, password:proxy.password,
              status:'fail', avg_ms:null, min_ms:null, success_rate:0, score:0,
              egress_ip:null, ip_info:null, ip_type:'unknown',
-             httpbin_pass:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
+             httpbin_pass:skipHttpbin?null:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
              bytes_sent:totalBytesSent, bytes_received:totalBytesRecv,
              px_challenge:pxChallenge, edge_rtt:null,
              rotating:false, ssl_inspected:false };
@@ -635,7 +643,7 @@ async function runJob(jobId, proxies, config) {
     while (true) {
       const i = queue++;
       if (i >= total) break;
-      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries, config.target_url || '');
+      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries, config.target_url || '', config.skip_httpbin || false);
       results[i] = r; completed++;
       job.tested = completed;
       if (r.status === 'pass') job.passed++; else job.failed++;
@@ -1251,6 +1259,128 @@ function buildJobDebugPrompt(jobId, job) {
   ].join('\n');
 }
 
+// ── AI Integration helpers ────────────────────────────────────────────────────
+function httpsPost(hostname, urlPath, extraHeaders, bodyObj) {
+  return new Promise(function(resolve, reject) {
+    var bodyStr = JSON.stringify(bodyObj);
+    var opts = {
+      hostname: hostname,
+      path: urlPath,
+      method: 'POST',
+      headers: Object.assign({
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(bodyStr),
+      }, extraHeaders),
+    };
+    var req = require('https').request(opts, function(r) {
+      var data = '';
+      r.on('data', function(c){ data += c; });
+      r.on('end', function(){
+        try { resolve({ status: r.statusCode, body: JSON.parse(data) }); }
+        catch(e) { resolve({ status: r.statusCode, body: { _raw: data } }); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, function(){ req.destroy(new Error('AI timeout')); });
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
+async function callAI(provider, apiKey, promptText) {
+  if (provider === 'claude') {
+    var r = await httpsPost('api.anthropic.com', '/v1/messages', {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    }, {
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: promptText }],
+    });
+    if (r.body.content && r.body.content[0]) return r.body.content[0].text;
+    throw new Error(r.body.error ? r.body.error.message : 'Claude error ' + r.status);
+  }
+  if (provider === 'openai') {
+    var r = await httpsPost('api.openai.com', '/v1/chat/completions', {
+      'Authorization': 'Bearer ' + apiKey,
+    }, {
+      model: 'gpt-4o-mini',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: promptText }],
+    });
+    if (r.body.choices && r.body.choices[0]) return r.body.choices[0].message.content;
+    throw new Error(r.body.error ? r.body.error.message : 'OpenAI error ' + r.status);
+  }
+  if (provider === 'gemini') {
+    var r = await httpsPost(
+      'generativelanguage.googleapis.com',
+      '/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
+      {},
+      { contents: [{ parts: [{ text: promptText }] }] }
+    );
+    if (r.body.candidates && r.body.candidates[0])
+      return r.body.candidates[0].content.parts[0].text;
+    throw new Error(r.body.error ? r.body.error.message : 'Gemini error ' + r.status);
+  }
+  throw new Error('Unknown AI provider: ' + provider);
+}
+
+function buildJobStatsText(job) {
+  if (!job) return 'No data.';
+  var du = job.data_usage || {};
+  var ia = job.ip_analysis || {};
+  var lines = [
+    'List: ' + (job.list_name || job.job_id),
+    'Total tested: ' + (job.total || 0),
+    'Passed: ' + (job.passed || 0) + ' (' + (job.total ? ((job.passed/job.total)*100).toFixed(1) : 0) + '%)',
+    'Failed: ' + (job.failed || 0),
+  ];
+  if (du.total_bytes) {
+    lines.push('PX detection rate: ' + (du.px_challenge_pct || 0) + '% (' + (du.px_challenge_count || 0) + ' proxies hit PerimeterX)');
+    if (du.httpbin_pass_pct != null) lines.push('Httpbin pass rate: ' + du.httpbin_pass_pct + '%');
+    if (du.target_pass_pct  != null) lines.push('Target URL pass rate: ' + du.target_pass_pct + '%');
+    lines.push('Data used: ' + (du.total_bytes / 1048576).toFixed(2) + ' MB');
+  }
+  if (ia.quality_score != null) {
+    lines.push('Pool quality score: ' + ia.quality_score + '/100');
+    lines.push('Residential: ' + (ia.residential_count || 0) + ' (' + (ia.residential_pct || 0) + '%)');
+    lines.push('Mobile: ' + (ia.mobile_count || 0));
+    lines.push('Datacenter: ' + (ia.datacenter_count || 0) + ' (' + (ia.datacenter_pct || 0) + '%)');
+    lines.push('Flagged: ' + (ia.flagged_count || 0));
+    lines.push('Unique egress IPs: ' + (ia.unique_ips || 0) + ' / ' + (ia.total_with_ip || 0));
+    lines.push('IP reuse rate: ' + (ia.reuse_rate_pct || 0) + '%');
+    if (ia.ssl_inspected_count) lines.push('SSL inspection: ' + ia.ssl_inspected_count + ' proxies');
+    if (ia.rotating_count)      lines.push('Rotating proxies: ' + ia.rotating_count);
+    if (ia.top_asns && ia.top_asns.length)
+      lines.push('Top ASNs: ' + ia.top_asns.slice(0,3).map(function(x){return x.asn+'('+x.count+')';}).join(', '));
+  }
+  return lines.join('\n');
+}
+
+function buildAiPrompt(job, compareJob) {
+  var ctx = [
+    'You are an expert proxy pool analyst for e-commerce automation.',
+    'Proxies are residential, mobile, or datacenter IPs used to route requests through third-party networks to evade bot detection on retail sites like Walmart, Amazon, and Target.',
+    '',
+    'Key metric guide:',
+    '- Pass rate: % of proxies that connected. Below 50% is poor.',
+    '- PX detection %: PerimeterX challenge rate. 0% = clean. 10%+ = concerning. 30%+ = the pool is heavily flagged.',
+    '- Residential %: higher is better. Datacenter IPs are blocked instantly by anti-bot systems.',
+    '- SSL inspection: the proxy provider is decrypting your HTTPS traffic — a privacy and security risk.',
+    '- Rotating proxies: egress IP changes per request — behavior is unpredictable for scraping.',
+    '- Latency: sub-300ms excellent. 300-800ms usable. 800ms+ poor for time-sensitive automation.',
+    '- IP reuse rate: lower is better. High reuse means the actual pool is smaller than advertised.',
+    '',
+    'Be concise, direct, and practical. No hedging. Lead with the single most important finding.',
+  ].join('\n');
+
+  if (compareJob) {
+    return ctx + '\n\nCompare these two proxy pool test runs. State clearly which pool is better for retail automation and why. Give exactly 3 specific action items.\n\n**Pool A — ' + (job.list_name || 'Test 1') + ':**\n' + buildJobStatsText(job) + '\n\n**Pool B — ' + (compareJob.list_name || 'Test 2') + ':**\n' + buildJobStatsText(compareJob) + '\n\nWhich pool wins and why? What should be done with each?';
+  }
+
+  return ctx + '\n\nAnalyze this proxy pool test. Give exactly 3-5 specific actionable insights. Be direct.\n\n' + buildJobStatsText(job) + '\n\nAnswer: (1) Is this pool usable for retail automation right now? (2) What is the single biggest risk? (3) What should the user do next?';
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 const server = http.createServer(async function(req,res){
   const parsed=url.parse(req.url,true), pathname=parsed.pathname, method=req.method;
@@ -1342,7 +1472,8 @@ const server = http.createServer(async function(req,res){
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
-                  top_n:parseInt(fields.top_n||'1000')};
+                  top_n:parseInt(fields.top_n||'1000'),
+                  skip_httpbin:(fields.skip_httpbin||'').trim()==='true'};
     const jobId=genId(), sid=fields.session_id||null;
     jobs[jobId]={job_id:jobId,status:'queued',session_id:sid,
       total:proxies.length,tested:0,passed:0,failed:0,
@@ -1693,7 +1824,8 @@ const server = http.createServer(async function(req,res){
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
-                  top_n:parseInt(fields.top_n||'1000')};
+                  top_n:parseInt(fields.top_n||'1000'),
+                  skip_httpbin:(fields.skip_httpbin||'').trim()==='true'};
     const sid=genId();
     sessions[sid]={session_id:sid,name:fields.session_name||fields.file.filename||'Session',
       status:'idle',run_count:0,run_ids:[],proxies,config,
@@ -1804,6 +1936,60 @@ const server = http.createServer(async function(req,res){
       const fp=path.join(__dirname,'results','session_'+sid+'.json');
       if(fs.existsSync(fp))fs.unlinkSync(fp);
       return jsonRes(res,{deleted:sid});
+    }
+  }
+
+  // ── AI Keys ────────────────────────────────────────────────────────────────
+  if(pathname==='/api/ai-keys'){
+    var aiKeysFile=path.join(DATA_DIR,'ai-keys.json');
+    function loadAiKeys(){ try{return JSON.parse(fs.readFileSync(aiKeysFile,'utf8'));}catch(e){return{};} }
+    if(method==='GET'){
+      var k=loadAiKeys();
+      // Return masked keys only
+      var masked={};
+      ['claude','openai','gemini'].forEach(function(p){
+        if(k[p]&&k[p].length>8) masked[p]=k[p].slice(0,4)+'•'.repeat(Math.min(12,k[p].length-8))+k[p].slice(-4);
+        else if(k[p]) masked[p]='•'.repeat(k[p].length);
+      });
+      return jsonRes(res,{keys:masked,default_provider:k.default_provider||''});
+    }
+    if(method==='POST'){
+      var body=await readBody(req); var data={};
+      try{data=JSON.parse(body.toString());}catch(e){}
+      var current=loadAiKeys();
+      if(data.provider&&data.key!==undefined){
+        if(data.key) current[data.provider]=data.key.trim();
+        else delete current[data.provider];
+      }
+      if(data.default_provider!==undefined) current.default_provider=data.default_provider;
+      fs.writeFileSync(aiKeysFile,JSON.stringify(current));
+      return jsonRes(res,{ok:true});
+    }
+  }
+
+  // ── AI Analyze ─────────────────────────────────────────────────────────────
+  if(pathname==='/api/ai-analyze'&&method==='POST'){
+    var body=await readBody(req); var data={};
+    try{data=JSON.parse(body.toString());}catch(e){}
+    var aiKeysFile2=path.join(DATA_DIR,'ai-keys.json');
+    var keys2={}; try{keys2=JSON.parse(fs.readFileSync(aiKeysFile2,'utf8'));}catch(e){}
+    // Determine provider (priority: claude > openai > gemini, overridden by default_provider)
+    var pref=keys2.default_provider||'';
+    var providerOrder=['claude','openai','gemini'];
+    if(pref&&keys2[pref]) providerOrder=[pref].concat(providerOrder.filter(function(p){return p!==pref;}));
+    var chosenProvider=null,chosenKey=null;
+    for(var pi=0;pi<providerOrder.length;pi++){
+      if(keys2[providerOrder[pi]]){chosenProvider=providerOrder[pi];chosenKey=keys2[providerOrder[pi]];break;}
+    }
+    if(!chosenProvider) return jsonRes(res,{error:'No AI key configured. Add one in Settings → AI Integration.'},400);
+    var job1=jobs[data.job_id], job2=data.compare_job_id?jobs[data.compare_job_id]:null;
+    if(!job1) return jsonRes(res,{error:'Job not found'},404);
+    var prompt=buildAiPrompt(job1,job2);
+    try{
+      var aiText=await callAI(chosenProvider,chosenKey,prompt);
+      return jsonRes(res,{response:aiText,provider:chosenProvider});
+    }catch(e){
+      return jsonRes(res,{error:'AI call failed: '+e.message},500);
     }
   }
 

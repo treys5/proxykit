@@ -399,6 +399,23 @@ body.light-mode .heatmap-cell,body.light-mode .provider-metric,body.light-mode .
 body.light-mode .toast{background:#ffffff;color:var(--accent);}
 body.light-mode .ip-group{background:#ffffff;}
 
+/* ── AI response panel ── */
+.ai-panel{border-top:1px solid var(--border);background:rgba(129,140,248,.03);}
+.ai-panel-hdr{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--accent);}
+.ai-panel-body{padding:14px 16px;font-size:12px;line-height:1.75;color:var(--text);white-space:pre-wrap;word-break:break-word;max-height:480px;overflow-y:auto;}
+.ai-panel-body strong,.ai-panel-body b{color:var(--accent);}
+.ai-spinner{display:inline-block;width:12px;height:12px;border:2px solid rgba(129,140,248,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.ai-provider-badge{font-size:9px;padding:2px 7px;border-radius:999px;background:rgba(129,140,248,.12);color:var(--accent);border:1px solid rgba(129,140,248,.25);font-weight:700;letter-spacing:.05em;}
+/* ── Config test toggles ── */
+.test-toggle-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(36,46,66,.5);}
+.test-toggle-row:last-child{border-bottom:none;}
+.test-toggle-info{flex:1;}
+.test-toggle-name{font-size:12px;font-weight:700;color:var(--text);}
+.test-toggle-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+.test-url-field{padding:6px 0 0;animation:fadeIn .15s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+
 /* ── Custom dialog ── */
 .app-dialog-backdrop{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;}
 .app-dialog-box{background:var(--surface2);border:1px solid var(--border-hi);border-radius:var(--r);padding:24px;min-width:320px;max-width:480px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.55);}
@@ -437,7 +454,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.1</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -545,11 +562,39 @@ body.light-mode .ip-group{background:#ffffff;}
         <span id="preRunEstDetail" style="flex:1">estimated data usage</span>
         <span style="color:var(--accent);font-size:10px;font-weight:600" id="preRunEstCount"></span>
       </div>
-      <label>TEST ENDPOINT URL</label>
-      <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting"
-        title="ip-api with full fields — required for residential/DC/mobile detection.">
-      <label>TARGET URL <span style="font-weight:400;color:var(--muted)">(optional — tested in parallel, e.g. walmart.com/robots.txt)</span></label>
-      <input type="text" id="targetUrl" value="https://www.walmart.com/search?q=iphone" placeholder="https://www.walmart.com/search?q=iphone" title="Secondary target tested alongside ip-api. Proxies that fail this URL get a heavy score penalty.">
+      <label style="margin-bottom:6px">TEST FEATURES</label>
+      <div style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:6px 12px;margin-bottom:12px;background:var(--bg);">
+        <!-- Toggle 1: IP Info -->
+        <div class="test-toggle-row">
+          <div class="test-toggle-info">
+            <div class="test-toggle-name">IP Info Detection</div>
+            <div class="test-toggle-sub">ip-api.com — classifies residential, mobile, datacenter</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="toggleIpApi" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+        </div>
+        <div id="ipApiUrlWrap" class="test-url-field" style="display:none">
+          <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting" style="margin-bottom:6px" placeholder="Leave blank to skip ip-api">
+        </div>
+        <!-- Toggle 2: PX / Target -->
+        <div class="test-toggle-row">
+          <div class="test-toggle-info">
+            <div class="test-toggle-name">PX / Target Test</div>
+            <div class="test-toggle-sub">Walmart search — detects PerimeterX challenges</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="toggleTarget" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+        </div>
+        <div id="targetUrlWrap" class="test-url-field" style="display:none">
+          <input type="text" id="targetUrl" value="https://www.walmart.com/search?q=iphone" style="margin-bottom:6px" placeholder="Leave blank to skip target test">
+        </div>
+        <!-- Toggle 3: Httpbin -->
+        <div class="test-toggle-row">
+          <div class="test-toggle-info">
+            <div class="test-toggle-name">Httpbin Connectivity Check</div>
+            <div class="test-toggle-sub">httpbin.org/ip — verifies basic proxy connectivity</div>
+          </div>
+          <label class="toggle-switch"><input type="checkbox" id="toggleHttpbin" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
       <div class="row2">
         <div><label>CONCURRENCY</label><input type="number" id="concurrency" value="150" min="10" max="500"></div>
         <div><label>TIMEOUT (s)</label><input type="number" id="timeout" value="10" min="1" max="60" step=".5"></div>
@@ -600,8 +645,19 @@ body.light-mode .ip-group{background:#ffffff;}
 
   <!-- Cross-session comparison -->
   <div class="panel" id="comparePanel" style="display:none">
-    <div class="ph">⬡ PROVIDER COMPARISON <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="compareSubtitle"></span></div>
+    <div class="ph">⬡ JOB COMPARISON <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400" id="compareSubtitle"></span>
+      <button id="aiCompareBtn" class="btn btn-out btn-sm" onclick="askAICompare()" style="display:none;margin-left:8px;border-color:rgba(129,140,248,.5);color:var(--accent);font-size:10px;padding:3px 10px">🤖 COMPARE WITH AI</button>
+    </div>
     <div class="compare-grid" id="compareGrid"></div>
+    <div id="aiComparePanel" class="ai-panel" style="display:none">
+      <div class="ai-panel-hdr">
+        <span>🤖</span><span>AI POOL COMPARISON</span>
+        <span id="aiCompareBadge" class="ai-provider-badge" style="display:none"></span>
+        <span id="aiCompareSpinner" class="ai-spinner" style="display:none"></span>
+        <button onclick="document.getElementById('aiComparePanel').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px">✕</button>
+      </div>
+      <div class="ai-panel-body" id="aiCompareBody"></div>
+    </div>
   </div>
 
   <!-- Session detail -->
@@ -744,7 +800,19 @@ body.light-mode .ip-group{background:#ffffff;}
       <span class="export-lbl" id="resExportLbl"></span>
       <button class="btn btn-out btn-sm" id="resCopyBtn" onclick="copyJob()">⎘ COPY TOP 1000</button>
       <button class="btn btn-out btn-sm" onclick="exportJob()">⬇ TXT</button>
+      <button class="btn btn-out btn-sm" id="aiAnalyzeBtn" onclick="askAI()" style="display:none;border-color:rgba(129,140,248,.5);color:var(--accent)">🤖 ASK AI</button>
       <button class="btn btn-out btn-sm" onclick="downloadJobDebug()">AI DEBUG</button>
+    </div>
+    <!-- AI response panel -->
+    <div id="aiResponsePanel" class="ai-panel" style="display:none">
+      <div class="ai-panel-hdr">
+        <span id="aiResponseIcon">🤖</span>
+        <span>AI ANALYSIS</span>
+        <span id="aiProviderBadge" class="ai-provider-badge" style="display:none"></span>
+        <span id="aiSpinner" class="ai-spinner" style="display:none"></span>
+        <button onclick="document.getElementById('aiResponsePanel').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 2px">✕</button>
+      </div>
+      <div class="ai-panel-body" id="aiResponseBody">Analyzing your results...</div>
     </div>
     <!-- Elite filter pipeline -->
     <div style="border-top:1px solid var(--border);padding:12px 16px;background:rgba(0,0,0,.15);">
@@ -926,6 +994,28 @@ body.light-mode .ip-group{background:#ffffff;}
         </div>
       </div>
       <div id="estimateDetails" style="margin-top:10px;font-size:11px;color:var(--muted);font-family:var(--mono)"></div>
+    </div>
+  </div>
+
+  <div class="panel settings-section">
+    <div class="ph">⬡ AI INTEGRATION
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Keys stored locally — never sent anywhere except the chosen AI provider</span>
+    </div>
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.6">
+      Add API keys to enable <strong style="color:var(--text)">🤖 Ask AI</strong> buttons in results panels. Claude is prioritized when multiple keys are set. Keys are written to <code style="font-size:11px;color:var(--accent)">ai-keys.json</code> in the app data folder.
+    </div>
+    <div id="aiKeyRows" style="border-bottom:1px solid var(--border)">
+      <!-- rendered by renderAiKeys() -->
+    </div>
+    <div style="padding:12px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <label style="font-size:11px;margin:0;color:var(--muted)">DEFAULT PROVIDER</label>
+      <select id="aiDefaultProvider" onchange="setAiDefault(this.value)" style="font-size:11px;padding:4px 8px;margin:0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:var(--r-xs);">
+        <option value="">Auto (Claude priority)</option>
+        <option value="claude">Claude (Anthropic)</option>
+        <option value="openai">ChatGPT (OpenAI)</option>
+        <option value="gemini">Gemini (Google)</option>
+      </select>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="aiKeyStatus"></span>
     </div>
   </div>
 
@@ -1231,8 +1321,19 @@ function useSource(type){
 
 function buildFD(){
   var fd=new FormData();
-  fd.append('test_url',document.getElementById('testUrl').value||'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting');
-  fd.append('target_url',(document.getElementById('targetUrl')||{value:''}).value||'');
+  // Smart toggle config
+  var ipApiOn=(document.getElementById('toggleIpApi')||{checked:true}).checked;
+  var targetOn=(document.getElementById('toggleTarget')||{checked:true}).checked;
+  var httpbinOn=(document.getElementById('toggleHttpbin')||{checked:true}).checked;
+  var testUrl=ipApiOn
+    ? DEFAULT_IPAPI_URL
+    : ((document.getElementById('testUrl')||{value:''}).value||'').trim()||DEFAULT_IPAPI_URL;
+  var targetUrl=targetOn
+    ? DEFAULT_TARGET_URL
+    : ((document.getElementById('targetUrl')||{value:''}).value||'').trim();
+  fd.append('test_url',testUrl);
+  fd.append('target_url',targetUrl);
+  fd.append('skip_httpbin',httpbinOn?'false':'true');
   fd.append('concurrency',document.getElementById('concurrency').value);
   fd.append('timeout',document.getElementById('timeout').value);
   fd.append('retries',document.getElementById('retries').value);
@@ -2290,6 +2391,9 @@ async function copyComposite(){
 function renderCompare(sessions){
   var panel=document.getElementById('comparePanel');
   if(!sessions||sessions.length<2){panel.style.display='none';return;}
+  // Show AI compare button if we have 2+ done jobs tracked
+  var aiCmpBtn=document.getElementById('aiCompareBtn');
+  if(aiCmpBtn) aiCmpBtn.style.display=_aiJobIdForCompare.length>=2?'':'none';
   panel.style.display='block';
   document.getElementById('compareSubtitle').textContent=sessions.length+' sessions';
   var grid=document.getElementById('compareGrid');
@@ -2337,7 +2441,7 @@ function setPage(page){
   document.getElementById('settingsPage').style.display     = page==='settings'     ? '' : 'none';
   document.getElementById('integrationsPage').style.display = page==='integrations' ? '' : 'none';
   if(page==='providers')    { refreshProviders(); loadSessionGroups(); }
-  if(page==='settings')     { renderDbgLog(); }
+  if(page==='settings')     { renderDbgLog(); renderAiKeys(); }
   if(page==='integrations') { renderIntegrationList(); refreshApiTab(); }
 }
 
@@ -3159,7 +3263,173 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.08 started');
+dbgLog('Proxy Tester v1.09.1 started');
+
+// ── Config test toggles ────────────────────────────────────────────────────
+function onTestToggle(){
+  var ipOn=document.getElementById('toggleIpApi').checked;
+  var tgOn=document.getElementById('toggleTarget').checked;
+  document.getElementById('ipApiUrlWrap').style.display=ipOn?'none':'';
+  document.getElementById('targetUrlWrap').style.display=tgOn?'none':'';
+}
+// Default URL constants (used when toggle is ON)
+var DEFAULT_IPAPI_URL='http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting';
+var DEFAULT_TARGET_URL='https://www.walmart.com/search?q=iphone';
+
+// ── AI Integration ────────────────────────────────────────────────────────
+var _aiJobIdForCompare=[]; // tracks last 2 completed job IDs
+
+function aiProviderLabel(p){
+  return {claude:'Claude',openai:'ChatGPT (OpenAI)',gemini:'Gemini (Google)'}[p]||p;
+}
+
+async function askAI(){
+  if(!activeJobId){toast('No active job.',true);return;}
+  var panel=document.getElementById('aiResponsePanel');
+  var body=document.getElementById('aiResponseBody');
+  var spinner=document.getElementById('aiSpinner');
+  var badge=document.getElementById('aiProviderBadge');
+  panel.style.display='block';
+  body.textContent='Analyzing your results...';
+  spinner.style.display='';
+  badge.style.display='none';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  try{
+    var r=await fetch(API+'/api/ai-analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({job_id:activeJobId})
+    });
+    var d=await r.json();
+    spinner.style.display='none';
+    if(d.error){body.textContent='⚠ '+d.error;return;}
+    badge.textContent=aiProviderLabel(d.provider);
+    badge.style.display='';
+    body.innerHTML=formatAiResponse(d.response);
+  }catch(e){
+    spinner.style.display='none';
+    body.textContent='⚠ Request failed: '+e.message;
+  }
+}
+
+async function askAICompare(){
+  if(_aiJobIdForCompare.length<2){toast('Need at least 2 completed jobs to compare.',true);return;}
+  var panel=document.getElementById('aiComparePanel');
+  var body=document.getElementById('aiCompareBody');
+  var spinner=document.getElementById('aiCompareSpinner');
+  var badge=document.getElementById('aiCompareBadge');
+  panel.style.display='block';
+  body.textContent='Comparing pools...';
+  spinner.style.display='';
+  badge.style.display='none';
+  try{
+    var r=await fetch(API+'/api/ai-analyze',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({job_id:_aiJobIdForCompare[0],compare_job_id:_aiJobIdForCompare[1]})
+    });
+    var d=await r.json();
+    spinner.style.display='none';
+    if(d.error){body.textContent='⚠ '+d.error;return;}
+    badge.textContent=aiProviderLabel(d.provider);
+    badge.style.display='';
+    body.innerHTML=formatAiResponse(d.response);
+  }catch(e){
+    spinner.style.display='none';
+    body.textContent='⚠ Request failed: '+e.message;
+  }
+}
+
+function formatAiResponse(text){
+  if(!text) return '';
+  // Bold **text** and *text*
+  return esc(text)
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^(\d+\.) /gm,'<strong>$1</strong> ')
+    .replace(/\n/g,'<br>');
+}
+
+function updateAiCompareTracker(jobId){
+  if(!jobId) return;
+  _aiJobIdForCompare=_aiJobIdForCompare.filter(function(id){return id!==jobId;});
+  _aiJobIdForCompare.unshift(jobId);
+  _aiJobIdForCompare=_aiJobIdForCompare.slice(0,2);
+  var btn=document.getElementById('aiCompareBtn');
+  if(btn) btn.style.display=_aiJobIdForCompare.length>=2?'':'none';
+}
+
+// Hook into loadJobResults to show AI button and track job
+var _origLoadJobResults=loadJobResults;
+loadJobResults=async function(jobId){
+  await _origLoadJobResults(jobId);
+  var btn=document.getElementById('aiAnalyzeBtn');
+  if(btn) btn.style.display='';
+  // Reset AI panel when loading new job
+  var p=document.getElementById('aiResponsePanel');
+  if(p) p.style.display='none';
+  updateAiCompareTracker(jobId);
+};
+
+// ── AI Key Management ──────────────────────────────────────────────────────
+var _aiKeyState={};
+async function renderAiKeys(){
+  try{
+    var r=await fetch(API+'/api/ai-keys');
+    var d=await r.json();
+    _aiKeyState=d.keys||{};
+    var defaultProv=d.default_provider||'';
+    var defSel=document.getElementById('aiDefaultProvider');
+    if(defSel) defSel.value=defaultProv;
+    var providers=[
+      {id:'claude', label:'Claude', sub:'Anthropic — claude-3-5-haiku-20241022', placeholder:'sk-ant-api03-...'},
+      {id:'openai', label:'ChatGPT', sub:'OpenAI — gpt-4o-mini', placeholder:'sk-proj-...'},
+      {id:'gemini', label:'Gemini', sub:'Google — gemini-1.5-flash', placeholder:'AIza...'},
+    ];
+    var el=document.getElementById('aiKeyRows');
+    if(!el) return;
+    el.innerHTML=providers.map(function(p){
+      var hasKey=!!_aiKeyState[p.id];
+      return '<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)">'
+        +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">'+esc(p.label)+'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+esc(p.sub)+'</div>'
+        +(hasKey?'<div style="font-size:10px;color:var(--accent);margin-top:3px">Key saved: '+esc(_aiKeyState[p.id])+'</div>':'')
+        +'</div>'
+        +'<input type="password" id="aiKey_'+p.id+'" placeholder="'+esc(p.placeholder)+'" style="width:200px;margin:0;padding:5px 9px;font-size:11px" autocomplete="off">'
+        +'<div style="display:flex;gap:5px">'
+        +'<button class="btn btn-out btn-sm" onclick="saveAiKey(\''+p.id+'\')">SAVE</button>'
+        +(hasKey?'<button class="btn btn-red btn-sm" onclick="deleteAiKey(\''+p.id+'\')">✕</button>':'')
+        +'</div>'
+        +'</div>';
+    }).join('');
+    var statusEl=document.getElementById('aiKeyStatus');
+    var keyCount=Object.keys(_aiKeyState).filter(function(k){return k!=='default_provider'&&_aiKeyState[k];}).length;
+    if(statusEl) statusEl.textContent=keyCount?keyCount+' provider'+(keyCount!==1?'s':'')+' configured':'No keys set';
+  }catch(e){ dbgLog('renderAiKeys error: '+e.message,'err'); }
+}
+async function saveAiKey(provider){
+  var inp=document.getElementById('aiKey_'+provider);
+  var key=(inp&&inp.value.trim())||'';
+  if(!key){toast('Paste a key first.',true);return;}
+  try{
+    await fetch(API+'/api/ai-keys',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({provider:provider,key:key})});
+    inp.value='';
+    toast('Key saved for '+aiProviderLabel(provider));
+    renderAiKeys();
+  }catch(e){toast('Save failed: '+e.message,true);}
+}
+async function deleteAiKey(provider){
+  if(!confirm('Remove '+aiProviderLabel(provider)+' key?'))return;
+  await fetch(API+'/api/ai-keys',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({provider:provider,key:''})});
+  toast('Key removed');
+  renderAiKeys();
+}
+async function setAiDefault(value){
+  await fetch(API+'/api/ai-keys',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({default_provider:value})});
+}
 </script>
 </body>
 </html>
