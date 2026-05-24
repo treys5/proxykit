@@ -8,7 +8,7 @@ compatibility_date = "2024-09-23"
 [[d1_databases]]
 binding = "DB"
 database_name = "proxykit-analytics"
-database_id   = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id   = "8824b3f6-36bc-4c4d-905c-9bfd398c3d0e"
 
 # ── Secrets (set via CLI, never hardcode) ────────────────────────────────────
 # npx wrangler secret put ADMIN_KEY

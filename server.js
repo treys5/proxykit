@@ -22,7 +22,7 @@ const DATA_DIR = process.env.APP_DATA_DIR || __dirname;
 // ── Analytics backend URL ─────────────────────────────────────────────────────
 // After deploying the Cloudflare Worker, replace this with your worker's URL.
 // e.g. 'https://proxykit-analytics.YOUR_CF_ACCOUNT.workers.dev'
-const ANALYTICS_URL = process.env.ANALYTICS_URL || 'https://proxykit-analytics.workers.dev';
+const ANALYTICS_URL = process.env.ANALYTICS_URL || 'https://proxykit-analytics.proxykit.workers.dev';
 
 const jobs      = {};
 const sessions  = {};
