@@ -502,7 +502,7 @@ body.light-mode .ip-group{background:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.7</div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER v1.09.8</div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -753,6 +753,12 @@ body.light-mode .ip-group{background:#ffffff;}
             <div class="res-lat-chart" id="sovLatChart"></div>
           </div>
         </div>
+        <!-- Session community comparison bar -->
+        <div id="sovCommunity" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.18);border-radius:var(--r-xs)">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--accent);margin-bottom:8px">⬡ VS. COMMUNITY AVERAGE</div>
+          <div id="sovCommunityInner" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:6px" id="sovCommunityFooter"></div>
+        </div>
       </div>
     </div>
 
@@ -925,6 +931,12 @@ body.light-mode .ip-group{background:#ffffff;}
               </div>
             </div>
           </div>
+        </div>
+        <!-- Community comparison bar (hidden until stats load) -->
+        <div id="ovCommunity" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.18);border-radius:var(--r-xs)">
+          <div style="font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--accent);margin-bottom:8px">⬡ VS. COMMUNITY AVERAGE</div>
+          <div id="ovCommunityInner" style="display:flex;gap:16px;flex-wrap:wrap"></div>
+          <div style="font-size:9px;color:var(--muted);margin-top:6px" id="ovCommunityFooter"></div>
         </div>
       </div>
     </div>
@@ -1201,6 +1213,30 @@ body.light-mode .ip-group{background:#ffffff;}
         <option value="gemini">Gemini (Google)</option>
       </select>
       <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="aiKeyStatus"></span>
+    </div>
+  </div>
+
+  <!-- ── Community Analytics ─────────────────────────────────────────────── -->
+  <div class="panel settings-section">
+    <div class="ph">⬡ COMMUNITY ANALYTICS
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Opt-in · Zero proxy data sent</span>
+    </div>
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.7">
+      When enabled, each completed test run sends <strong style="color:var(--text)">anonymised aggregate statistics</strong>
+      (pass rates, avg speed, ISP counts, vendor detections) to a shared analytics server.
+      <strong style="color:var(--fail)">No proxy IPs, usernames, passwords, or URLs are ever transmitted.</strong>
+      In return, the results page shows how your pool compares to the community average.
+    </div>
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:13px;font-weight:600">
+        <input type="checkbox" id="analyticsOptIn" onchange="setAnalyticsOptIn(this.checked)" style="width:16px;height:16px;accent-color:var(--accent)">
+        Share anonymised test statistics
+      </label>
+      <span id="analyticsOptInStatus" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div style="padding:10px 16px;font-size:11px;color:var(--muted)">
+      Your random client ID (generated locally, not linked to any account):
+      <code id="analyticsClientId" style="color:var(--accent);font-size:10px;margin-left:6px">—</code>
     </div>
   </div>
 
@@ -1960,6 +1996,10 @@ function renderSessOverview(s, ia, proxies, sjobs){
         +'<div style="font-size:8px;color:var(--muted);margin-top:3px;white-space:nowrap">'+b.label+'</div></div>';
     }).join('');
   }
+
+  // Community comparison
+  var sessPassNum=s.proxy_count>0?Math.round(passedAll/s.proxy_count*100):null;
+  renderCommunityComparison('sovCommunityInner','sovCommunityFooter','sovCommunity',sessPassNum,avgMs);
 }
 
 function renderSessPxSection(sjobs, proxies){
@@ -2661,6 +2701,10 @@ function renderJobOverview(s, r){
         +'<div style="font-size:8px;color:var(--muted);margin-top:3px;white-space:nowrap">'+b.label+'</div></div>';
     }).join('');
   }
+
+  // Community comparison
+  var yourPassNum=s.total>0?Math.round(s.passed/s.total*100):null;
+  renderCommunityComparison('ovCommunityInner','ovCommunityFooter','ovCommunity',yourPassNum,avgMs);
 }
 
 // ── Vendor color/label helpers ────────────────────────────────────────────────
@@ -3847,7 +3891,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.7';
+    var current='1.09.8';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3914,7 +3958,8 @@ intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
 checkForUpdate();
-dbgLog('Proxy Tester v1.09.7 started');
+loadAnalyticsSettings();
+dbgLog('Proxy Tester v1.09.8 started');
 
 // ── Config test toggles ────────────────────────────────────────────────────
 function onTestToggle(){
@@ -4084,6 +4129,103 @@ async function deleteAiKey(provider){
 async function setAiDefault(value){
   await fetch(API+'/api/ai-keys',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({default_provider:value})});
+}
+
+// ── Community Analytics ────────────────────────────────────────────────────
+var _communityStats = null;   // cached community stats
+var _analyticsOptIn = false;
+
+async function loadAnalyticsSettings(){
+  try{
+    var r=await fetch(API+'/api/analytics/settings');
+    var d=await r.json();
+    _analyticsOptIn=!!d.opt_in;
+    var cb=document.getElementById('analyticsOptIn');
+    var st=document.getElementById('analyticsOptInStatus');
+    var ci=document.getElementById('analyticsClientId');
+    if(cb) cb.checked=_analyticsOptIn;
+    if(st) st.textContent=_analyticsOptIn?'✓ Sharing enabled — community comparison unlocked':'Off — enable to compare your pool against other users';
+    if(ci) ci.textContent=d.client_id||'(will be generated on next run)';
+    if(_analyticsOptIn) fetchCommunityStats();
+  }catch(e){ dbgLog('Analytics settings load failed: '+e.message); }
+}
+
+async function setAnalyticsOptIn(checked){
+  _analyticsOptIn=checked;
+  var st=document.getElementById('analyticsOptInStatus');
+  if(st) st.textContent='Saving...';
+  try{
+    await fetch(API+'/api/analytics/settings',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({opt_in:checked})
+    });
+    // Reload to get client_id if just opted in
+    await loadAnalyticsSettings();
+    if(checked) fetchCommunityStats();
+    toast(checked?'Analytics sharing enabled — community comparison active':'Analytics sharing disabled');
+  }catch(e){
+    if(st) st.textContent='Save failed';
+    toast('Failed to save setting',true);
+  }
+}
+
+async function fetchCommunityStats(){
+  try{
+    var r=await fetch(API+'/api/analytics/community');
+    if(!r.ok) return;
+    _communityStats=await r.json();
+    dbgLog('Community stats loaded: '+_communityStats.total_proxies_tested+' proxies in pool');
+  }catch(e){
+    dbgLog('Community stats unavailable: '+e.message);
+    _communityStats=null;
+  }
+}
+
+function renderCommunityComparison(innerElId, footerElId, wrapElId, yourPassRate, yourAvgMs){
+  var wrap=document.getElementById(wrapElId);
+  var inner=document.getElementById(innerElId);
+  var footer=document.getElementById(footerElId);
+  if(!wrap||!inner) return;
+
+  if(!_analyticsOptIn||!_communityStats||_communityStats.error){
+    wrap.style.display='none';
+    return;
+  }
+  wrap.style.display='';
+
+  var cs=_communityStats;
+  var items=[];
+
+  // Pass rate comparison
+  if(yourPassRate!=null && cs.avg_pass_rate!=null){
+    var diff=Math.round((yourPassRate-cs.avg_pass_rate)*10)/10;
+    var col=diff>=0?'var(--accent)':'var(--fail)';
+    var arrow=diff>=0?'▲':'▼';
+    items.push({label:'PASS RATE',yours:yourPassRate+'%',comm:cs.avg_pass_rate+'%',diff:arrow+' '+Math.abs(diff)+'%',col});
+  }
+
+  // Speed comparison
+  if(yourAvgMs!=null && cs.avg_speed_ms!=null){
+    var msDiff=Math.round(yourAvgMs-cs.avg_speed_ms);
+    var msCol=msDiff<=0?'var(--accent)':'var(--fail)';  // lower ms = better
+    var msArrow=msDiff<=0?'▲':'▼';
+    items.push({label:'AVG SPEED',yours:yourAvgMs+'ms',comm:cs.avg_speed_ms+'ms',diff:msArrow+' '+Math.abs(msDiff)+'ms',col:msCol});
+  }
+
+  inner.innerHTML=items.map(function(x){
+    return '<div style="display:flex;flex-direction:column;gap:3px;min-width:110px">'
+      +'<div style="font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted)">'+x.label+'</div>'
+      +'<div style="display:flex;align-items:baseline;gap:6px">'
+      +'<span style="font-size:18px;font-weight:900;font-family:var(--mono);color:'+x.col+'">'+x.yours+'</span>'
+      +'<span style="font-size:10px;color:'+x.col+'">'+x.diff+' vs avg</span>'
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--muted)">Community avg: '+x.comm+'</div>'
+      +'</div>';
+  }).join('');
+
+  if(footer) footer.textContent='Based on '+Number(cs.total_proxies_tested).toLocaleString()
+    +' proxies tested across '+Number(cs.active_clients_7d||0).toLocaleString()+' active clients (7d)';
 }
 </script>
 </body>

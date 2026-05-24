@@ -1,0 +1,19 @@
+name = "proxykit-analytics"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# ── D1 database ──────────────────────────────────────────────────────────────
+# Run once to create: npx wrangler d1 create proxykit-analytics
+# Then paste the database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "proxykit-analytics"
+database_id   = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# ── Secrets (set via CLI, never hardcode) ────────────────────────────────────
+# npx wrangler secret put ADMIN_KEY
+# Enter a strong random string — this protects /admin
+
+# ── Local dev vars (not used in production) ──────────────────────────────────
+[vars]
+ENVIRONMENT = "production"

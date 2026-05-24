@@ -13,17 +13,110 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.7';
+const APP_VERSION = '1.09.8';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
 const DATA_DIR = process.env.APP_DATA_DIR || __dirname;
+
+// ── Analytics backend URL ─────────────────────────────────────────────────────
+// After deploying the Cloudflare Worker, replace this with your worker's URL.
+// e.g. 'https://proxykit-analytics.YOUR_CF_ACCOUNT.workers.dev'
+const ANALYTICS_URL = process.env.ANALYTICS_URL || 'https://proxykit-analytics.workers.dev';
 
 const jobs      = {};
 const sessions  = {};
 const providers = {};
 
 const sessionGroups = {};
+
+// ── Analytics config (analytics.json in DATA_DIR) ────────────────────────────
+function loadAnalyticsConfig() {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'analytics.json'), 'utf8')); }
+  catch (e) { return {}; }
+}
+function saveAnalyticsConfig(data) {
+  fs.writeFileSync(path.join(DATA_DIR, 'analytics.json'), JSON.stringify(data, null, 2));
+}
+function getOrCreateClientId() {
+  var cfg = loadAnalyticsConfig();
+  if (cfg.client_id) return cfg.client_id;
+  // Generate a random UUID v4
+  var id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+  cfg.client_id = id;
+  saveAnalyticsConfig(cfg);
+  return id;
+}
+
+// ── Fire-and-forget analytics report after a job completes ───────────────────
+function reportAnalytics(job, results) {
+  var cfg = loadAnalyticsConfig();
+  if (!cfg.opt_in) return;
+
+  try {
+    var clientId = getOrCreateClientId();
+    var du       = job.data_usage || {};
+    var passing  = (results || []).filter(function(r){ return r && r.status === 'pass'; });
+
+    var avgMs = passing.length
+      ? Math.round(passing.reduce(function(s, r){ return s + (r.avg_ms || 0); }, 0) / passing.length)
+      : null;
+
+    // IP type counts
+    var typeCounts = { residential: 0, mobile: 0, datacenter: 0, unknown: 0 };
+    (results || []).forEach(function(r){
+      if (r && typeCounts[r.ip_type] !== undefined) typeCounts[r.ip_type]++;
+    });
+
+    // ISP histogram (top 10, no raw IPs)
+    var ispMap = {};
+    (results || []).forEach(function(r){
+      if (!r || !r.ip_info) return;
+      var isp = (r.ip_info.org || r.ip_info.isp || '').slice(0, 80);
+      if (isp) ispMap[isp] = (ispMap[isp] || 0) + 1;
+    });
+    var topIsps = Object.entries(ispMap).sort(function(a,b){ return b[1]-a[1]; }).slice(0, 10)
+      .map(function(e){ return { name: e[0], count: e[1] }; });
+
+    // Country histogram
+    var countryMap = {};
+    (results || []).forEach(function(r){
+      if (!r || !r.ip_info || !r.ip_info.countryCode) return;
+      var cc = r.ip_info.countryCode;
+      countryMap[cc] = (countryMap[cc] || 0) + 1;
+    });
+
+    var payload = {
+      client_id:           clientId,
+      app_version:         APP_VERSION,
+      proxies_tested:      job.tested   || 0,
+      proxies_passed:      job.passed   || 0,
+      avg_ms:              avgMs,
+      has_target:          (du.target_tested || 0) > 0,
+      target_pass_rate:    du.target_pass_pct || null,
+      ip_type_residential: typeCounts.residential,
+      ip_type_mobile:      typeCounts.mobile,
+      ip_type_datacenter:  typeCounts.datacenter,
+      ip_type_unknown:     typeCounts.unknown,
+      top_isps:            topIsps,
+      vendor_counts:       du.vendor_counts  || {},
+      status_counts:       du.status_counts  || {},
+      country_counts:      countryMap,
+    };
+
+    // Fire-and-forget — never block or throw
+    fetch(ANALYTICS_URL + '/ingest', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    }).catch(function(){});
+  } catch (e) {
+    // Silently ignore — analytics must never affect the main app
+  }
+}
 
 // ── Proxy key includes credentials so rotating proxies aren't deduped ────────
 function proxyKey(p) {
@@ -776,6 +869,9 @@ async function runJob(jobId, proxies, config) {
       stats:{total,passed:job.passed,failed:job.failed},
       data_usage:job.data_usage,
       ip_analysis:job.ip_analysis,top_proxies:job.top_proxies},null,2));
+
+  // Opt-in anonymised analytics — fire and forget, never throws
+  reportAnalytics(job, results);
 }
 
 // ── Egress IP analysis ────────────────────────────────────────────────────────
@@ -2101,6 +2197,34 @@ const server = http.createServer(async function(req,res){
   }
 
   // ── AI Keys ────────────────────────────────────────────────────────────────
+  // ── Analytics settings & community stats ──────────────────────────────────
+  if(pathname==='/api/analytics/settings'){
+    if(method==='GET'){
+      var anCfg=loadAnalyticsConfig();
+      return jsonRes(res,{opt_in:!!anCfg.opt_in, client_id:anCfg.client_id||null});
+    }
+    if(method==='POST'){
+      var anBody=await readBody(req); var anData={};
+      try{anData=JSON.parse(anBody.toString());}catch(e){}
+      var anCfg2=loadAnalyticsConfig();
+      if(anData.opt_in!==undefined) anCfg2.opt_in=!!anData.opt_in;
+      // Ensure a client_id exists when opting in
+      if(anCfg2.opt_in && !anCfg2.client_id) anCfg2.client_id=getOrCreateClientId();
+      saveAnalyticsConfig(anCfg2);
+      return jsonRes(res,{ok:true,opt_in:anCfg2.opt_in});
+    }
+  }
+
+  if(pathname==='/api/analytics/community'&&method==='GET'){
+    try{
+      var cResp=await fetch(ANALYTICS_URL+'/stats');
+      var cData=await cResp.json();
+      return jsonRes(res,cData);
+    }catch(e){
+      return jsonRes(res,{error:'Community stats unavailable'},503);
+    }
+  }
+
   if(pathname==='/api/ai-keys'){
     var aiKeysFile=path.join(DATA_DIR,'ai-keys.json');
     function loadAiKeys(){ try{return JSON.parse(fs.readFileSync(aiKeysFile,'utf8'));}catch(e){return{};} }
