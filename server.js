@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.14';
+const APP_VERSION = '1.10.0';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -277,13 +277,19 @@ const RESIDENTIAL_KEYWORDS = [
 const PX_MARKERS = [
   '_pxhd', 'px-captcha', 'press & hold', '_pxde', 'pxchallenge',
   'px.init', 'perimeterx', '_px2', 'pxi/', 'human challenge',
+  'g.perimeterx.net', 'human.js', '_pxff', 'challenge.js',
+  '"_pxvid"', '"_px3"', 'pxde=', 'pxff=',
 ];
 
 // ── Anti-bot vendor detection markers ────────────────────────────────────────
-const AKAMAI_MARKERS   = ['_abck', 'akamai_pixel', '/akam/', 'ak_bmsc', 'sensor_data', 'bm_sz', 'akamaibox'];
+const AKAMAI_MARKERS   = [
+  '_abck', 'akamai_pixel', '/akam/', 'ak_bmsc', 'sensor_data', 'bm_sz', 'akamaibox',
+  'bmak.js', 'akam_nob', 'bm_sv', 'bm_mi', 'akavpau_',
+  'detect.js', 'sb_detect', '/_akam/',
+];
 const CF_MARKERS       = ['cf-ray', '__cf_bm', 'cloudflare', 'cf_clearance', 'ray id', 'cf-mitigated'];
-const DATADOME_MARKERS = ['datadome', 'dd_referrer', 'dd_cookie', 'ddos-guard'];
-const IMPERVA_MARKERS  = ['incapsula', 'incap_ses', 'visid_incap', 'reese84', 'x-iinfo'];
+const DATADOME_MARKERS = ['datadome', 'dd_referrer', 'dd_cookie', 'ddos-guard', '_dd_s', 'datadome.co'];
+const IMPERVA_MARKERS  = ['incapsula', 'incap_ses', 'visid_incap', 'reese84', 'x-iinfo', 'reese84', '_imperva'];
 const BLOCK_KEYWORDS   = ['access denied', 'bot detected', 'unusual traffic', 'automated queries',
                           'please verify', 'security check', 'captcha', 'blocked'];
 
@@ -464,17 +470,57 @@ function detectEdgeCDN(headers) {
 
 // ── Anti-bot cookie classification ───────────────────────────────────────────
 var ANTIBOT_COOKIE_DEFS = [
+  // PerimeterX
   { pattern:/_pxhd/i,        vendor:'px',         type:'device',    label:'PX device ID' },
   { pattern:/_px[23]/i,      vendor:'px',         type:'tracking',  label:'PX risk session' },
   { pattern:/_pxvid/i,       vendor:'px',         type:'tracking',  label:'PX visitor ID' },
+  { pattern:/_pxde/i,        vendor:'px',         type:'device',    label:'PX device extra' },
+  { pattern:/_pxff/i,        vendor:'px',         type:'device',    label:'PX browser flags' },
+  // Akamai Bot Manager
   { pattern:/_abck/i,        vendor:'akamai',     type:'tracking',  label:'Akamai Bot Manager' },
   { pattern:/bm_sz/i,        vendor:'akamai',     type:'tracking',  label:'Akamai sensor data' },
+  { pattern:/bm_sv/i,        vendor:'akamai',     type:'tracking',  label:'Akamai sensor value' },
+  { pattern:/bm_mi/i,        vendor:'akamai',     type:'tracking',  label:'Akamai metrics' },
+  { pattern:/ak_bmsc/i,      vendor:'akamai',     type:'device',    label:'Akamai BM session' },
+  { pattern:/akavpau/i,      vendor:'akamai',     type:'device',    label:'Akamai viewport auth' },
+  // Cloudflare
   { pattern:/cf_clearance/i, vendor:'cloudflare', type:'clearance', label:'CF challenge passed' },
   { pattern:/__cf_bm/i,      vendor:'cloudflare', type:'tracking',  label:'CF Bot Management' },
+  // DataDome
   { pattern:/datadome/i,     vendor:'datadome',   type:'tracking',  label:'DataDome session' },
+  { pattern:/_dd_s/i,        vendor:'datadome',   type:'tracking',  label:'DataDome session flag' },
+  // Imperva / Incapsula
   { pattern:/incap_ses/i,    vendor:'imperva',    type:'tracking',  label:'Imperva session' },
   { pattern:/visid_incap/i,  vendor:'imperva',    type:'device',    label:'Imperva visitor ID' },
+  { pattern:/reese84/i,      vendor:'imperva',    type:'device',    label:'Imperva Reese token' },
 ];
+
+// ── Site endpoint definitions for multi-endpoint antibot testing ─────────────
+var SITE_ENDPOINTS = {
+  walmart: [
+    { key:'home',   url:'https://www.walmart.com/',                 label:'Home'   },
+    { key:'search', url:'https://www.walmart.com/search?q=iphone',  label:'Search' },
+    { key:'login',  url:'https://www.walmart.com/account/login',    label:'Login'  },
+    { key:'cart',   url:'https://www.walmart.com/cart',             label:'Cart'   },
+  ],
+  bestbuy: [
+    { key:'home',   url:'https://www.bestbuy.com/',                                  label:'Home'   },
+    { key:'search', url:'https://www.bestbuy.com/site/searchpage.jsp?st=rtx+4090',  label:'Search' },
+    { key:'login',  url:'https://www.bestbuy.com/identity/signin',                  label:'Login'  },
+  ],
+  homedepot: [
+    { key:'home',   url:'https://www.homedepot.com/',               label:'Home'   },
+    { key:'search', url:'https://www.homedepot.com/s/rtx%204090',   label:'Search' },
+  ],
+  target: [
+    { key:'home',   url:'https://www.target.com/',                  label:'Home'   },
+    { key:'search', url:'https://www.target.com/s?searchTerm=ps5',  label:'Search' },
+  ],
+  ticketmaster: [
+    { key:'home',   url:'https://www.ticketmaster.com/',                 label:'Home'   },
+    { key:'search', url:'https://www.ticketmaster.com/search?q=concert', label:'Search' },
+  ],
+};
 
 function extractAntibotCookies(headersRaw) {
   if (!headersRaw) return { cookies:[], has_clearance:false };
@@ -535,6 +581,146 @@ function saveScoreConfig(cfg) {
   _scoreConfigCache = cfg;
   fs.writeFileSync(path.join(DATA_DIR,'score-config.json'), JSON.stringify(cfg, null, 2));
 }
+
+// ── Notify config (notify.json in DATA_DIR) ──────────────────────────────────
+function loadNotifyConfig() {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR,'notify.json'),'utf8')); }
+  catch(e) { return { discord_webhook:'' }; }
+}
+function saveNotifyConfig(cfg) {
+  fs.writeFileSync(path.join(DATA_DIR,'notify.json'), JSON.stringify(cfg, null, 2));
+}
+
+// ── Discord notification sender ────────────────────────────────────────────────
+function sendDiscordNotification(webhookUrl, job, schedName) {
+  if (!webhookUrl || !webhookUrl.startsWith('https://discord.com/api/webhooks/')) return;
+  try {
+    var du  = job.data_usage || {};
+    var passRate = job.total > 0 ? Math.round(job.passed / job.total * 100) : 0;
+    var pxPct    = du.px_challenge_pct != null ? du.px_challenge_pct : null;
+    var tgtPct   = du.target_pass_pct  != null ? du.target_pass_pct  : null;
+    var avgMs    = null;
+    if (job.top_proxies && job.top_proxies.length) {
+      var msArr = job.top_proxies.slice(0,20).map(function(p){return p.avg_ms||0;}).filter(Boolean);
+      if (msArr.length) avgMs = Math.round(msArr.reduce(function(a,b){return a+b;},0)/msArr.length);
+    }
+    var color = passRate >= 70 ? 0x818cf8 : passRate >= 40 ? 0xff9f43 : 0xff5c5c;
+    var verdict = passRate >= 70 ? 'ELITE' : passRate >= 50 ? 'GOOD' : passRate >= 30 ? 'WORKABLE' : 'WEAK';
+    var fields = [
+      { name:'Pass Rate',  value: passRate + '%',  inline:true },
+      { name:'Proxies',    value: (job.total||0).toLocaleString(), inline:true },
+      { name:'Verdict',    value: verdict,          inline:true },
+    ];
+    if (pxPct  != null) fields.push({ name:'PX Hit %',      value: pxPct  + '%', inline:true });
+    if (tgtPct != null) fields.push({ name:'Target Pass %', value: tgtPct + '%', inline:true });
+    if (avgMs  != null) fields.push({ name:'Avg Speed',     value: avgMs  + 'ms', inline:true });
+    if (du.vendor_counts) {
+      var vc = du.vendor_counts;
+      var vStr = Object.keys(vc).map(function(k){return k.toUpperCase()+':'+vc[k];}).join(' · ');
+      if (vStr) fields.push({ name:'Bot Vendors Hit', value:vStr, inline:false });
+    }
+    var embed = {
+      title: '📊 ' + (schedName||'Scheduled Test') + ' — Complete',
+      color: color,
+      fields: fields,
+      footer: { text:'PROXY TESTER v'+APP_VERSION },
+      timestamp: new Date().toISOString(),
+    };
+    var payload = JSON.stringify({ embeds:[embed] });
+    var purl = url.parse(webhookUrl);
+    var opts = {
+      hostname: purl.hostname,
+      path: purl.path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'User-Agent': 'DiscordBot (proxy-tester, '+APP_VERSION+')',
+      },
+    };
+    var req2 = https.request(opts, function(r2){ r2.resume(); });
+    req2.on('error', function(){});
+    req2.write(payload);
+    req2.end();
+  } catch(e) {}
+}
+
+// ── Schedule storage ──────────────────────────────────────────────────────────
+var _schedules = [], _schedulesLoaded = false;
+function schedulesFile() { return path.join(DATA_DIR, 'schedules.json'); }
+function loadSchedules() {
+  if (_schedulesLoaded) return _schedules;
+  try { _schedules = JSON.parse(fs.readFileSync(schedulesFile(),'utf8')); } catch(e) { _schedules=[]; }
+  _schedulesLoaded = true;
+  return _schedules;
+}
+function saveSchedules() {
+  try { fs.writeFileSync(schedulesFile(), JSON.stringify(_schedules, null, 2)); } catch(e) {}
+}
+
+function nextFireMs(sched) {
+  if (sched.status === 'paused' || sched.status === 'done') return Infinity;
+  var baseMs = new Date(sched.fire_at).getTime();
+  if (sched.type === 'once') return baseMs;
+  // Recurring: fire_at is anchor, interval_hours is gap
+  var intervalMs = (sched.interval_hours || 1) * 3600000;
+  var last = sched.last_fired ? new Date(sched.last_fired).getTime() : 0;
+  if (!last) return baseMs;
+  return last + intervalMs;
+}
+
+// ── Scheduled job launcher ─────────────────────────────────────────────────────
+async function fireScheduledJob(sched) {
+  var proxies = parseProxies(sched.proxy_text || '');
+  if (!proxies.length) return;
+  var jobId = 'j'+Date.now();
+  jobs[jobId] = {
+    job_id:jobId, status:'running', total:proxies.length,
+    tested:0, passed:0, failed:0, progress_pct:0,
+    elapsed_sec:0, eta_sec:null,
+    list_name: sched.name || 'Scheduled Test',
+    session_id:null, startTime:Date.now(),
+    px_challenge_count:0, scheduled_id:sched.id,
+  };
+  var config = {
+    test_url:     'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting',
+    target_url:   sched.target_url  || '',
+    target_urls:  Array.isArray(sched.target_urls) ? sched.target_urls : null,
+    skip_httpbin: false,
+    concurrency:  Math.min(sched.concurrency || 50, 150),
+    timeout:      sched.timeout  || 10,
+    retries:      sched.retries  || 1,
+    top_n:        sched.top_n    || 1000,
+  };
+  await runJob(jobId, proxies, config);
+  // Discord notify
+  var notifyCfg = loadNotifyConfig();
+  var webhook = sched.discord_webhook || notifyCfg.discord_webhook;
+  if (webhook) sendDiscordNotification(webhook, jobs[jobId], sched.name);
+  sched.last_job_id = jobId;
+}
+
+// Scheduler tick — every 30 seconds
+setInterval(async function() {
+  loadSchedules();
+  var now = Date.now();
+  for (var i = 0; i < _schedules.length; i++) {
+    var s = _schedules[i];
+    if (s.status === 'paused' || s.status === 'done' || s.status === 'running') continue;
+    if (now < nextFireMs(s)) continue;
+    s.status = 'running';
+    s.last_fired = new Date().toISOString();
+    saveSchedules();
+    try { await fireScheduledJob(s); } catch(e) {}
+    if (s.type === 'once') {
+      s.status = 'done';
+    } else {
+      s.status = 'pending';
+      s.next_fire = new Date(nextFireMs(s)).toISOString();
+    }
+    saveSchedules();
+  }
+}, 30000);
 
 // ── TCP CONNECT timing — measures round-trip time through the proxy to target ──
 function tcpPingThrough(proxy, host, port, timeoutMs) {
@@ -719,15 +905,24 @@ function parseIpApiResponse(body) {
   } catch (e) { return null; }
 }
 
-async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttpbin) {
-  var ipapiAttempts = [], httpbinAttempts = [], targetAttempts = [];
+async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrls, skipHttpbin) {
+  // Normalize: allow callers that pass a single string (backwards compat)
+  if (!Array.isArray(targetUrls)) {
+    var _ts = typeof targetUrls === 'string' ? targetUrls.trim() : '';
+    targetUrls = _ts ? [{ key:'target', url:_ts, label:'Target' }] : [];
+  }
+
+  var ipapiAttempts = [], httpbinAttempts = [];
+  // Per-endpoint attempt buckets: { [key]: attempt[] }
+  var allTargetAttempts = {};
+  targetUrls.forEach(function(t) { allTargetAttempts[t.key] = []; });
   var totalBytesSent = 0, totalBytesRecv = 0;
 
   for (var i = 0; i < retries; i++) {
-    // Build task list dynamically so httpbin can be skipped
     var taskDefs = [{ key:'ipapi', url:testUrl }];
     if (!skipHttpbin) taskDefs.push({ key:'httpbin', url:HTTPBIN_URL });
-    if (targetUrl)    taskDefs.push({ key:'target',  url:targetUrl   });
+    // Each target endpoint gets its own task
+    targetUrls.forEach(function(t) { taskDefs.push({ key:'t_'+t.key, url:t.url }); });
 
     var taskResults = await Promise.all(taskDefs.map(function(td){
       return testProxyOnce(proxy, td.url, timeoutMs);
@@ -735,95 +930,100 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
     var byKey = {};
     taskDefs.forEach(function(td, idx){ byKey[td.key] = taskResults[idx]; });
 
-    var ipapi   = byKey.ipapi;
-    var httpbin = byKey.httpbin || null;
-    var tgt     = byKey.target  || null;
+    ipapiAttempts.push(byKey.ipapi);
+    if (byKey.httpbin) httpbinAttempts.push(byKey.httpbin);
+    targetUrls.forEach(function(t) {
+      var r = byKey['t_'+t.key];
+      if (r) allTargetAttempts[t.key].push(r);
+    });
 
-    ipapiAttempts.push(ipapi);
-    if (httpbin) httpbinAttempts.push(httpbin);
-    if (tgt)     targetAttempts.push(tgt);
-
-    totalBytesSent += (ipapi.bytes_sent||0)
-      + (httpbin ? (httpbin.bytes_sent||0)    : 0)
-      + (tgt     ? (tgt.bytes_sent||0)        : 0);
-    totalBytesRecv += (ipapi.bytes_received||0)
-      + (httpbin ? (httpbin.bytes_received||0) : 0)
-      + (tgt     ? (tgt.bytes_received||0)     : 0);
+    taskResults.forEach(function(r){ totalBytesSent += r.bytes_sent||0; totalBytesRecv += r.bytes_received||0; });
   }
 
   var goodIpapi   = ipapiAttempts.filter(function(a){ return a.ok; });
   var goodHttpbin = httpbinAttempts.filter(function(a){ return a.ok; });
-  var goodTarget  = targetAttempts.filter(function(a){ return a.ok; });
 
-  var ipapiPass   = goodIpapi.length > 0;
-  // null when skipped, true/false when tested
-  var httpbinPass = skipHttpbin ? null : (goodHttpbin.length > 0);
-  var targetTested = targetAttempts.length > 0;
-  var targetPass   = targetTested ? goodTarget.length > 0 : null;
+  // ── Per-endpoint result map ──────────────────────────────────────────────
+  var target_results = {};
+  targetUrls.forEach(function(t) {
+    var attempts = allTargetAttempts[t.key] || [];
+    var good = attempts.filter(function(a){ return a.ok; });
+    var lastRef = good.length ? good[good.length-1] : (attempts.length ? attempts[attempts.length-1] : null);
+    target_results[t.key] = {
+      label: t.label,
+      url:   t.url,
+      pass:  good.length > 0,
+      px:    attempts.some(function(a){ return a.px_challenge; }),
+      ms:    good.length ? Math.round(good.reduce(function(s,a){return s+a.ms;},0)/good.length) : null,
+      http_status:    lastRef ? (lastRef.http_status  || null) : null,
+      bot_vendor:     lastRef ? (lastRef.bot_vendor   || null) : null,
+      antibot_cookies:lastRef ? (lastRef.antibot_cookies || []) : [],
+      edge_cdn:       lastRef ? (lastRef.edge_cdn     || null) : null,
+    };
+  });
 
-  // Rotating detection: if multiple ip-api replies have different egress IPs, proxy rotates
-  var egressIPs = goodIpapi.map(function(a) {
-    var d = parseIpApiResponse(a.body); return d ? d.query : null;
-  }).filter(Boolean);
-  var uniqueEgress = Array.from(new Set(egressIPs));
-  var rotating = egressIPs.length >= 2 && uniqueEgress.length > 1;
+  // ── Aggregate fields (backwards-compatible) ──────────────────────────────
+  var allEpResults      = Object.values(target_results);
+  var allEpAttempts     = Object.values(allTargetAttempts).reduce(function(acc,arr){return acc.concat(arr);}, []);
+  var targetTested      = targetUrls.length > 0;
+  // target_pass: true if ANY endpoint passed (proxy can reach the site)
+  var targetPass        = targetTested ? allEpResults.some(function(r){ return r.pass; }) : null;
+  var pxChallenge       = ipapiAttempts.concat(httpbinAttempts).concat(allEpAttempts)
+                           .some(function(a){ return a.px_challenge; });
+  var targetPx          = allEpAttempts.some(function(a){ return a.px_challenge; });
 
-  // SSL inspection: any attempt flagged it
-  var sslInspected = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts)
-    .some(function(a){ return a.ssl_inspected; });
+  // Average ms across passing endpoints
+  var passingMs = allEpResults.filter(function(r){ return r.pass && r.ms; }).map(function(r){ return r.ms; });
+  var targetMs  = passingMs.length ? Math.round(passingMs.reduce(function(a,b){return a+b;},0)/passingMs.length) : null;
 
-  var pxChallenge = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts)
-    .some(function(a){ return a.px_challenge; });
-  var targetPx = targetAttempts.some(function(a){ return a.px_challenge; });
+  // Best representative attempt for single-value fields (prefer last successful)
+  var bestRef = null;
+  if (allEpAttempts.length) {
+    var goodAll = allEpAttempts.filter(function(a){ return a.ok; });
+    bestRef = goodAll.length ? goodAll[goodAll.length-1] : allEpAttempts[allEpAttempts.length-1];
+  }
 
-  var targetMs = (targetTested && goodTarget.length)
-    ? Math.round(goodTarget.reduce(function(s,a){return s+a.ms;},0) / goodTarget.length) : null;
-
-  // Anti-bot: use last good target attempt (or last attempt if all failed)
-  var targetBotVendor    = null;
-  var targetStatus       = null;
-  var targetResponseSize = null;
+  var targetBotVendor    = bestRef ? (bestRef.bot_vendor    || null) : null;
+  var targetStatus       = bestRef ? (bestRef.http_status   || null) : null;
+  var targetResponseSize = bestRef ? (bestRef.response_size != null ? bestRef.response_size : null) : null;
   var edgeCDN            = null;
-  var antibotCookies     = [];
-  var antibotHasClearance= false;
-  var pxRiskScore        = null;
   var h2Support          = false;
-  if (targetAttempts.length) {
-    var tgtRef = goodTarget.length ? goodTarget[goodTarget.length - 1] : targetAttempts[targetAttempts.length - 1];
-    targetBotVendor    = tgtRef.bot_vendor           || null;
-    targetStatus       = tgtRef.http_status          || null;
-    targetResponseSize = tgtRef.response_size != null ? tgtRef.response_size : null;
-    edgeCDN            = tgtRef.edge_cdn             || null;
-    antibotCookies     = tgtRef.antibot_cookies      || [];
-    antibotHasClearance= tgtRef.antibot_has_clearance|| false;
-    pxRiskScore        = tgtRef.px_risk_score != null ? tgtRef.px_risk_score : null;
-    h2Support          = tgtRef.h2_support           || false;
-    // Try other attempts for edge CDN if last didn't have it
-    if (!edgeCDN) {
-      for (var ti = 0; ti < targetAttempts.length; ti++) {
-        if (targetAttempts[ti].edge_cdn) { edgeCDN = targetAttempts[ti].edge_cdn; break; }
-      }
+  var pxRiskScore        = bestRef ? (bestRef.px_risk_score != null ? bestRef.px_risk_score : null) : null;
+
+  // Merge antibot cookies from all endpoints (deduplicate by cookie name)
+  var abCookieMap = {};
+  allEpResults.forEach(function(ep) {
+    (ep.antibot_cookies || []).forEach(function(c){ abCookieMap[c.name] = c; });
+    if (ep.edge_cdn && !edgeCDN) edgeCDN = ep.edge_cdn;
+  });
+  var antibotCookies      = Object.values(abCookieMap);
+  var antibotHasClearance = antibotCookies.some(function(c){ return c.type === 'clearance'; });
+
+  // Edge CDN fallback scan
+  if (!edgeCDN) {
+    for (var ti = 0; ti < allEpAttempts.length; ti++) {
+      if (allEpAttempts[ti].edge_cdn) { edgeCDN = allEpAttempts[ti].edge_cdn; break; }
     }
   }
-  // Anonymity level from httpbin /get response (echoes request headers)
-  var anonLevel = null;
-  if (goodHttpbin.length) {
-    anonLevel = detectAnonymityLevel(goodHttpbin[goodHttpbin.length - 1].body);
-  }
-  // H2 also detectable from ip-api or httpbin attempts if no target
-  if (!h2Support) {
-    var allAttempts = ipapiAttempts.concat(httpbinAttempts).concat(targetAttempts);
-    h2Support = allAttempts.some(function(a){ return a.h2_support; });
-  }
 
-  // Use ip-api latency as the primary timing signal
-  var allGood = goodIpapi.concat(goodHttpbin);
-  if (!allGood.length) {
+  var allAttempts = ipapiAttempts.concat(httpbinAttempts).concat(allEpAttempts);
+  h2Support    = allAttempts.some(function(a){ return a.h2_support; });
+  var sslInspected = allAttempts.some(function(a){ return a.ssl_inspected; });
+
+  var egressIPs    = goodIpapi.map(function(a){ var d=parseIpApiResponse(a.body); return d?d.query:null; }).filter(Boolean);
+  var uniqueEgress = Array.from(new Set(egressIPs));
+  var rotating     = egressIPs.length >= 2 && uniqueEgress.length > 1;
+
+  var httpbinPass = skipHttpbin ? null : (goodHttpbin.length > 0);
+  var anonLevel   = null;
+  if (goodHttpbin.length) anonLevel = detectAnonymityLevel(goodHttpbin[goodHttpbin.length-1].body);
+
+  if (!goodIpapi.length) {
     return { host:proxy.host, port:proxy.port, protocol:proxy.protocol,
              username:proxy.username, password:proxy.password,
              status:'fail', avg_ms:null, min_ms:null, success_rate:0, score:0,
              egress_ip:null, ip_info:null, ip_type:'unknown',
-             httpbin_pass:skipHttpbin?null:false, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
+             httpbin_pass:httpbinPass, target_pass:targetPass, target_ms:targetMs, target_px:targetPx,
              bytes_sent:totalBytesSent, bytes_received:totalBytesRecv,
              px_challenge:pxChallenge, edge_rtt:null,
              rotating:false, ssl_inspected:false,
@@ -831,10 +1031,11 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
              target_response_size:targetResponseSize,
              edge_cdn:edgeCDN, anon_level:anonLevel,
              antibot_cookies:antibotCookies, antibot_has_clearance:antibotHasClearance,
-             px_risk_score:pxRiskScore, h2_support:h2Support };
+             px_risk_score:pxRiskScore, h2_support:h2Support,
+             target_results:target_results };
   }
 
-  var lats = goodIpapi.length ? goodIpapi.map(function(a){return a.ms;}) : goodHttpbin.map(function(a){return a.ms;});
+  var lats = goodIpapi.map(function(a){return a.ms;});
   var avg  = lats.reduce(function(a,b){return a+b;},0) / lats.length;
   var min  = Math.min.apply(null, lats);
   var rate = goodIpapi.length / retries;
@@ -848,13 +1049,13 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
   var asnNum = ipInfo ? extractAsnNum(ipInfo.as) : null;
   var isDcAsn = asnNum !== null && DATACENTER_ASN_NUMS.has(asnNum);
 
-  // TCP edge RTT (async, non-blocking — fires after main tests)
+  // TCP edge RTT — use first target endpoint's host
   var edgeRtt = null;
-  if (targetUrl) {
+  if (targetUrls.length) {
     try {
-      var parsed = new URL(targetUrl);
-      var edgeHost = parsed.hostname;
-      var edgePort = parsed.port ? parseInt(parsed.port) : (parsed.protocol === 'https:' ? 443 : 80);
+      var eParsed  = new URL(targetUrls[0].url);
+      var edgeHost = eParsed.hostname;
+      var edgePort = eParsed.port ? parseInt(eParsed.port) : (eParsed.protocol === 'https:' ? 443 : 80);
       edgeRtt = await tcpPingThrough(proxy, edgeHost, edgePort, Math.min(timeoutMs, 5000));
     } catch(e) { edgeRtt = null; }
   }
@@ -865,24 +1066,17 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
   var wTotal = (w.speed||0) + (w.reliability||0) + (w.target||0) + (w.ip_type||0) + (w.anti_bot||0);
   if (wTotal <= 0) wTotal = 100;
 
-  // Speed: 100 at ≤200ms → 0 at ≥2000ms (linear)
-  var speedScore = avg != null ? Math.max(0, Math.min(100, 100 - ((avg - 200) / 18))) : 50;
-
-  // Reliability: success rate (0–1) → 0–100
+  var speedScore       = avg != null ? Math.max(0, Math.min(100, 100 - ((avg - 200) / 18))) : 50;
   var reliabilityScore = Math.round(rate * 100);
+  var targetScore      = !targetTested ? 50 : (targetPass ? 100 : 0);
 
-  // Target: 100 pass, 0 fail, 50 untested
-  var targetScore = !targetTested ? 50 : (targetPass ? 100 : 0);
-
-  // IP type quality
   var IP_TYPE_SCORES = { residential:100, mobile:85, unknown:40, flagged_proxy:10, datacenter:5, private:0 };
-  var ipTypeScore = IP_TYPE_SCORES[ipType] !== undefined ? IP_TYPE_SCORES[ipType] : 40;
+  var ipTypeScore    = IP_TYPE_SCORES[ipType] !== undefined ? IP_TYPE_SCORES[ipType] : 40;
   if (isDcAsn && ipTypeScore > 10) ipTypeScore = 10;
 
-  // Anti-bot: clearance cookie = good (proxy passed the challenge), tracked = neutral, blocked = bad
   var antiBotScore = 100;
   if (antibotHasClearance) {
-    antiBotScore = 90; // passed challenge
+    antiBotScore = 90;
   } else if (pxChallenge || targetBotVendor) {
     antiBotScore = targetPass ? 35 : 0;
   }
@@ -918,6 +1112,7 @@ async function testProxy(proxy, testUrl, timeoutMs, retries, targetUrl, skipHttp
     edge_cdn: edgeCDN, anon_level: anonLevel,
     antibot_cookies: antibotCookies, antibot_has_clearance: antibotHasClearance,
     px_risk_score: pxRiskScore, h2_support: h2Support,
+    target_results: target_results,
   };
 }
 
@@ -928,11 +1123,19 @@ async function runJob(jobId, proxies, config) {
   const total = proxies.length, results = new Array(total);
   const conc  = Math.min(config.concurrency, total);
   let queue = 0, completed = 0;
+
+  // Normalize target URLs — prefer target_urls array, fall back to target_url string
+  var _tUrls = config.target_urls;
+  if (!Array.isArray(_tUrls) || !_tUrls.length) {
+    var _tStr = (config.target_url || '').trim();
+    _tUrls = _tStr ? [{ key:'target', url:_tStr, label:'Target' }] : [];
+  }
+
   async function worker() {
     while (true) {
       const i = queue++;
       if (i >= total) break;
-      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries, config.target_url || '', config.skip_httpbin || false);
+      const r = await testProxy(proxies[i], config.test_url, config.timeout * 1000, config.retries, _tUrls, config.skip_httpbin || false);
       results[i] = r; completed++;
       job.tested = completed;
       if (r.status === 'pass') job.passed++; else job.failed++;
@@ -1812,8 +2015,11 @@ const server = http.createServer(async function(req,res){
     if(!fields.file) return jsonRes(res,{error:'No file field'},400);
     const proxies=parseProxies(fields.file.data.toString('utf-8'));
     if(!proxies.length) return jsonRes(res,{error:'No valid proxies found'},400);
+    var _parsedTUrls=null;
+    if(fields.target_urls){try{_parsedTUrls=JSON.parse(fields.target_urls);}catch(e){}}
     const config={test_url:fields.test_url||'http://ip-api.com/json',
                   target_url:(fields.target_url||'').trim(),
+                  target_urls:_parsedTUrls,
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
@@ -2034,6 +2240,7 @@ const server = http.createServer(async function(req,res){
       const config={
         test_url:ov.test_url||'http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting',
         target_url:(ov.target_url||'').trim(),
+        target_urls:Array.isArray(ov.target_urls)?ov.target_urls:null,
         concurrency:parseInt(ov.concurrency||'150'),
         timeout:parseFloat(ov.timeout||'10'),
         retries:parseInt(ov.retries||'1'),
@@ -2105,8 +2312,11 @@ const server = http.createServer(async function(req,res){
     if(!fields.file) return jsonRes(res,{error:'No file field'},400);
     const proxies=parseProxies(fields.file.data.toString('utf-8'));
     if(!proxies.length) return jsonRes(res,{error:'No valid proxies found'},400);
+    var _parsedTUrls2=null;
+    if(fields.target_urls){try{_parsedTUrls2=JSON.parse(fields.target_urls);}catch(e){}}
     const config={test_url:fields.test_url||'http://ip-api.com/json',
                   target_url:(fields.target_url||'').trim(),
+                  target_urls:_parsedTUrls2,
                   concurrency:parseInt(fields.concurrency||'150'),
                   timeout:parseFloat(fields.timeout||'10'),
                   retries:parseInt(fields.retries||'1'),
@@ -2327,6 +2537,84 @@ const server = http.createServer(async function(req,res){
         saveScoreConfig(sc2);
       }
       return jsonRes(res,{ok:true,weights:sc2.weights});
+    }
+  }
+
+  // ── Notify config (Discord webhook for scheduled tests) ───────────────────
+  if(pathname==='/api/notify-config'){
+    if(method==='GET') return jsonRes(res, loadNotifyConfig());
+    if(method==='POST'){
+      var ncBody=await readBody(req); var ncData={};
+      try{ncData=JSON.parse(ncBody.toString());}catch(e){}
+      var nc=loadNotifyConfig();
+      if(ncData.discord_webhook!==undefined) nc.discord_webhook=ncData.discord_webhook||'';
+      saveNotifyConfig(nc);
+      // Optional: send a test ping
+      if(ncData.test&&nc.discord_webhook){
+        sendDiscordNotification(nc.discord_webhook,
+          {total:0,passed:0,top_proxies:[]}, '✅ Webhook test — connected!');
+      }
+      return jsonRes(res,{ok:true});
+    }
+  }
+
+  // ── Schedules ──────────────────────────────────────────────────────────────
+  if(pathname==='/api/schedules'){
+    if(method==='GET') return jsonRes(res, loadSchedules().map(function(s){
+      return Object.assign({}, s, {proxy_text: undefined, proxy_count: s.proxy_count||0});
+    }));
+    if(method==='POST'){
+      var schdBody=await readBody(req); var schdData={};
+      try{schdData=JSON.parse(schdBody.toString());}catch(e){}
+      var proxiesForCount = parseProxies(schdData.proxy_text||'');
+      var newSched = {
+        id:              'sched_'+Date.now(),
+        name:            schdData.name            || 'Scheduled Test',
+        type:            schdData.type            || 'once',
+        fire_at:         schdData.fire_at         || new Date().toISOString(),
+        interval_hours:  schdData.interval_hours  || 1,
+        next_fire:       schdData.fire_at         || new Date().toISOString(),
+        proxy_text:      schdData.proxy_text      || '',
+        proxy_count:     proxiesForCount.length,
+        proxy_type:      schdData.proxy_type      || 'residential',
+        target_url:      schdData.target_url      || '',
+        target_urls:     Array.isArray(schdData.target_urls) ? schdData.target_urls : null,
+        preset:          schdData.preset          || 'antibot',
+        concurrency:     schdData.concurrency     || 50,
+        timeout:         schdData.timeout         || 10,
+        retries:         schdData.retries         || 1,
+        top_n:           schdData.top_n           || 1000,
+        discord_webhook: schdData.discord_webhook || '',
+        status:          'pending',
+        last_fired:      null,
+        last_job_id:     null,
+        created_at:      new Date().toISOString(),
+      };
+      loadSchedules();
+      _schedules.push(newSched);
+      saveSchedules();
+      return jsonRes(res, Object.assign({}, newSched, {proxy_text:undefined}), 201);
+    }
+  }
+  if(pathname.startsWith('/api/schedules/')){
+    var scId=pathname.slice('/api/schedules/'.length);
+    loadSchedules();
+    var scIdx=_schedules.findIndex(function(s){return s.id===scId;});
+    if(method==='DELETE'){
+      if(scIdx>=0) _schedules.splice(scIdx,1);
+      saveSchedules();
+      return jsonRes(res,{ok:true});
+    }
+    if(method==='PATCH'){
+      var scPatchBody=await readBody(req); var scPatch={};
+      try{scPatch=JSON.parse(scPatchBody.toString());}catch(e){}
+      if(scIdx>=0) Object.assign(_schedules[scIdx], scPatch);
+      saveSchedules();
+      return jsonRes(res, scIdx>=0?Object.assign({},_schedules[scIdx],{proxy_text:undefined}):{});
+    }
+    if(method==='GET'){
+      if(scIdx<0) return jsonRes(res,{error:'Not found'},404);
+      return jsonRes(res, Object.assign({},_schedules[scIdx],{proxy_text:undefined}));
     }
   }
 

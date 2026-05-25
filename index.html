@@ -504,7 +504,7 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.14</span></div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.10.0</span></div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -614,37 +614,131 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
         <span id="preRunEstDetail" style="flex:1">estimated data usage</span>
         <span style="color:var(--accent);font-size:10px;font-weight:600" id="preRunEstCount"></span>
       </div>
-      <label style="margin-bottom:6px">TEST FEATURES</label>
-      <div style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:6px 12px;margin-bottom:12px;background:var(--bg);">
-        <!-- Toggle 1: IP Info -->
-        <div class="test-toggle-row">
-          <div class="test-toggle-info">
-            <div class="test-toggle-name">IP Info Detection</div>
-            <div class="test-toggle-sub">ip-api.com — classifies residential, mobile, datacenter</div>
+      <label style="margin-bottom:6px">PROBE PRESET</label>
+      <select id="probePreset" style="margin-bottom:4px" onchange="onPresetChange()">
+        <option value="antibot">ANTIBOT + IP ANALYSIS</option>
+        <option value="ip">IP ANALYSIS ONLY</option>
+        <option value="speed">PING / SPEED</option>
+        <option value="custom">CUSTOM</option>
+      </select>
+      <!-- One-line probe summary — updates on preset/target change -->
+      <div id="presetSummary" style="font-size:10px;color:var(--muted);margin-bottom:10px;font-family:var(--mono);padding:0 2px"></div>
+
+      <!-- ANTIBOT options -->
+      <div id="presetAntibotOpts">
+        <label style="margin-bottom:5px">TARGET SITE</label>
+        <select id="antibotTarget" style="margin-bottom:6px" onchange="onAntibotTargetChange();updatePresetSummary()">
+          <option value="walmart">Walmart.com — PX + Akamai</option>
+          <option value="bestbuy">Best Buy — PerimeterX</option>
+          <option value="homedepot">Home Depot — PerimeterX</option>
+          <option value="target">Target.com — Shape Security</option>
+          <option value="ticketmaster">Ticketmaster — Akamai</option>
+          <option value="custom">Custom URL...</option>
+        </select>
+        <div id="antibotCustomUrlWrap" style="display:none">
+          <input type="text" id="antibotCustomUrl" placeholder="https://..." style="margin-bottom:8px" oninput="updatePresetSummary();renderEndpointPreview()">
+        </div>
+        <!-- Endpoint preview -->
+        <div id="endpointPreview" style="margin-bottom:10px;border:1px solid var(--border);border-radius:var(--r-xs);overflow:hidden;"></div>
+
+        <!-- Scheduling section -->
+        <details id="scheduleSection" style="margin-top:4px;margin-bottom:10px;">
+          <summary style="font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--accent);cursor:pointer;user-select:none;padding:8px 0 6px;list-style:none;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px">⏱</span> SCHEDULE THIS TEST
+          </summary>
+          <div style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:12px;background:var(--bg);margin-top:4px">
+
+            <!-- Name -->
+            <label>NAME</label>
+            <input type="text" id="schedName" placeholder="e.g. Walmart Drop Day" style="margin-bottom:10px">
+
+            <!-- Run at (always shown) -->
+            <label>RUN AT (local time)</label>
+            <input type="datetime-local" id="schedFireAt" style="margin-bottom:10px;font-family:var(--mono);font-size:12px">
+
+            <!-- Repeat toggle -->
+            <div class="test-toggle-row" style="padding:0;border:none;margin-bottom:0">
+              <div class="test-toggle-info">
+                <div class="test-toggle-name" style="font-size:12px">Repeat</div>
+                <div id="schedRepeatLabel" class="test-toggle-sub">Run once, then stop</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" id="schedRepeat" onchange="onSchedRepeatChange()"><span class="toggle-slider"></span></label>
+            </div>
+            <div id="schedRepeatOpts" style="display:none;padding:8px 0 4px;display:none">
+              <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                <span style="font-size:12px;color:var(--muted);white-space:nowrap">Every</span>
+                <input type="number" id="schedIntervalHours" value="1" min="1" max="168" style="width:65px;margin-bottom:0">
+                <span style="font-size:12px;color:var(--muted)">hours</span>
+              </div>
+            </div>
+
+            <!-- Discord notify toggle -->
+            <div class="test-toggle-row" style="padding:0;border:none;margin-top:10px;margin-bottom:0">
+              <div class="test-toggle-info">
+                <div class="test-toggle-name" style="font-size:12px">Discord Notify</div>
+                <div class="test-toggle-sub">Post results to a webhook on completion</div>
+              </div>
+              <label class="toggle-switch"><input type="checkbox" id="schedDiscordToggle" onchange="onSchedDiscordChange()"><span class="toggle-slider"></span></label>
+            </div>
+            <div id="schedDiscordOpts" style="display:none;margin-top:8px">
+              <input type="text" id="schedDiscordWebhook" placeholder="https://discord.com/api/webhooks/..." style="margin-bottom:0;font-size:11px">
+            </div>
+
+            <!-- Proxy count + submit -->
+            <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+              <span id="schedProxyCount" style="flex:1;font-size:11px;color:var(--muted)">—</span>
+              <button class="btn btn-sm" onclick="createSchedule()">+ SCHEDULE</button>
+            </div>
           </div>
-          <label class="toggle-switch"><input type="checkbox" id="toggleIpApi" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+        </details>
+      </div>
+
+      <!-- IP ANALYSIS description -->
+      <div id="presetIpOpts" style="display:none">
+        <div style="font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:10px;line-height:1.5">
+          Tests each proxy via <strong style="color:var(--text)">ip-api.com</strong> and <strong style="color:var(--text)">httpbin.org</strong>.<br>
+          Returns: IP type, country, ASN, ISP, anonymity level. No target site tested.
         </div>
-        <div id="ipApiUrlWrap" class="test-url-field" style="display:none">
-          <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting" style="margin-bottom:6px" placeholder="Leave blank to skip ip-api">
+      </div>
+
+      <!-- SPEED description -->
+      <div id="presetSpeedOpts" style="display:none">
+        <div style="font-size:11px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:10px;line-height:1.5">
+          Minimal probe — <strong style="color:var(--text)">latency &amp; connectivity only</strong>.<br>
+          Fastest preset. No IP classification, no target test.
         </div>
-        <!-- Toggle 2: PX / Target -->
-        <div class="test-toggle-row">
-          <div class="test-toggle-info">
-            <div class="test-toggle-name">PX / Target Test</div>
-            <div class="test-toggle-sub">Walmart search — detects PerimeterX challenges</div>
+      </div>
+
+      <!-- CUSTOM toggles (original UI) -->
+      <div id="presetCustomOpts" style="display:none">
+        <div style="border:1.5px solid var(--border);border-radius:var(--r-sm);padding:6px 12px;margin-bottom:12px;background:var(--bg);">
+          <div class="test-toggle-row">
+            <div class="test-toggle-info">
+              <div class="test-toggle-name">IP Info (ip-api)</div>
+              <div class="test-toggle-sub">Classify residential, mobile, datacenter</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleIpApi" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
           </div>
-          <label class="toggle-switch"><input type="checkbox" id="toggleTarget" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
-        </div>
-        <div id="targetUrlWrap" class="test-url-field" style="display:none">
-          <input type="text" id="targetUrl" value="https://www.walmart.com/search?q=iphone" style="margin-bottom:6px" placeholder="Leave blank to skip target test">
-        </div>
-        <!-- Toggle 3: Httpbin -->
-        <div class="test-toggle-row">
-          <div class="test-toggle-info">
-            <div class="test-toggle-name">Httpbin Connectivity Check</div>
-            <div class="test-toggle-sub">httpbin.org/ip — verifies basic proxy connectivity</div>
+          <div id="ipApiUrlWrap" class="test-url-field" style="display:none">
+            <input type="text" id="testUrl" value="http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting" style="margin-bottom:6px">
           </div>
-          <label class="toggle-switch"><input type="checkbox" id="toggleHttpbin" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+          <div class="test-toggle-row">
+            <div class="test-toggle-info">
+              <div class="test-toggle-name">Target / PX Test</div>
+              <div class="test-toggle-sub">Custom target URL — detects bot challenges</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleTarget" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+          </div>
+          <div id="targetUrlWrap" class="test-url-field" style="display:none">
+            <input type="text" id="targetUrl" value="https://www.walmart.com/search?q=iphone" style="margin-bottom:6px">
+          </div>
+          <div class="test-toggle-row">
+            <div class="test-toggle-info">
+              <div class="test-toggle-name">Httpbin Check</div>
+              <div class="test-toggle-sub">Anonymity detection via header echo</div>
+            </div>
+            <label class="toggle-switch"><input type="checkbox" id="toggleHttpbin" checked onchange="onTestToggle()"><span class="toggle-slider"></span></label>
+          </div>
         </div>
       </div>
       <div class="row2">
@@ -1296,6 +1390,32 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
   </div>
 
   <div class="panel settings-section">
+    <div class="ph">⬡ DISCORD NOTIFICATIONS
+      <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">Sends a summary embed to your channel after each scheduled test</span>
+    </div>
+    <div style="padding:16px;border-bottom:1px solid var(--border)">
+      <label>WEBHOOK URL</label>
+      <input type="text" id="discordWebhookInput" placeholder="https://discord.com/api/webhooks/..." style="margin-bottom:10px">
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-out btn-sm" onclick="testDiscordWebhook()">▷ TEST</button>
+        <button class="btn btn-sm" onclick="saveDiscordWebhook()">SAVE</button>
+      </div>
+      <div id="discordWebhookStatus" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+    </div>
+    <div style="padding:12px 16px;font-size:11px;color:var(--muted);line-height:1.6">
+      In Discord: <strong style="color:var(--text)">Edit Channel → Integrations → Webhooks → New Webhook</strong>. Copy the URL and paste above. The bot will post a summary card after every scheduled test completes.
+    </div>
+  </div>
+
+  <!-- Scheduled tests list -->
+  <div class="panel settings-section" id="scheduleListPanel">
+    <div class="ph">⬡ SCHEDULED TESTS
+      <button class="btn btn-out btn-sm" style="margin-left:auto;padding:3px 10px;font-size:10px" onclick="loadScheduleList()">↺ REFRESH</button>
+    </div>
+    <div id="scheduleListEl"><div class="empty" style="padding:16px">No scheduled tests yet. Configure one in the Tester → ANTIBOT preset.</div></div>
+  </div>
+
+  <div class="panel settings-section">
     <div class="ph">⬡ HOW IT WORKS</div>
     <div style="padding:16px;font-size:12px;color:var(--muted);line-height:1.8">
       <p style="margin-bottom:10px">Add your proxy provider API credentials here. Once configured, you can pull fresh proxy lists directly in the <strong style="color:var(--text)">Tester → API</strong> tab without copy-pasting.</p>
@@ -1330,6 +1450,33 @@ let activeSessionId=null, activeJobId=null;
 let runMode='single', pollTimer=null;
 let _sessAnalyzed=[], _lastRunCount=-1, _lastUpdatedAt='', _sessTypeFilter='all';
 let _sessionAnalytics=null, _sessionProviderFilter='all', _jobResults=[], _jobProviderFilter='all';
+
+// ── Site endpoint definitions — must be top-level so all functions can access
+var SITE_ENDPOINTS={
+  walmart:[
+    {key:'home',  url:'https://www.walmart.com/',                label:'Home'  },
+    {key:'search',url:'https://www.walmart.com/search?q=iphone', label:'Search'},
+    {key:'login', url:'https://www.walmart.com/account/login',   label:'Login' },
+    {key:'cart',  url:'https://www.walmart.com/cart',            label:'Cart'  },
+  ],
+  bestbuy:[
+    {key:'home',  url:'https://www.bestbuy.com/',                                 label:'Home'  },
+    {key:'search',url:'https://www.bestbuy.com/site/searchpage.jsp?st=rtx+4090', label:'Search'},
+    {key:'login', url:'https://www.bestbuy.com/identity/signin',                 label:'Login' },
+  ],
+  homedepot:[
+    {key:'home',  url:'https://www.homedepot.com/',              label:'Home'  },
+    {key:'search',url:'https://www.homedepot.com/s/rtx%204090', label:'Search'},
+  ],
+  target:[
+    {key:'home',  url:'https://www.target.com/',                 label:'Home'  },
+    {key:'search',url:'https://www.target.com/s?searchTerm=ps5', label:'Search'},
+  ],
+  ticketmaster:[
+    {key:'home',  url:'https://www.ticketmaster.com/',                 label:'Home'  },
+    {key:'search',url:'https://www.ticketmaster.com/search?q=concert', label:'Search'},
+  ],
+};
 
 setInterval(function(){ document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').split('.')[0]+' UTC'; },1000);
 
@@ -1491,30 +1638,52 @@ function useSource(type){
     updatePreRunEstimate(l.count);
   }
   toast('Ready: '+activeSource.name);
+  updateSchedProxyCount();
+}
+
+function getPresetParams(){
+  var preset=document.getElementById('probePreset').value;
+  if(preset==='antibot'){
+    var sel=document.getElementById('antibotTarget').value;
+    var targetUrls, targetUrl;
+    if(sel==='custom'){
+      var cu=(document.getElementById('antibotCustomUrl').value||'').trim()||DEFAULT_TARGET_URL;
+      targetUrls=[{key:'custom',url:cu,label:'Custom'}];
+      targetUrl=cu;
+    } else {
+      targetUrls=SITE_ENDPOINTS[sel]||SITE_ENDPOINTS.walmart;
+      targetUrl=targetUrls[0].url;
+    }
+    return{test_url:DEFAULT_IPAPI_URL, target_url:targetUrl, target_urls:targetUrls, skip_httpbin:false};
+  } else if(preset==='ip'){
+    return{test_url:DEFAULT_IPAPI_URL, target_url:'', target_urls:[], skip_httpbin:false};
+  } else if(preset==='speed'){
+    return{test_url:'', target_url:'', target_urls:[], skip_httpbin:false}; // httpbin only — fastest
+  } else { // custom
+    var ipApiOn=(document.getElementById('toggleIpApi')||{checked:true}).checked;
+    var targetOn=(document.getElementById('toggleTarget')||{checked:true}).checked;
+    var httpbinOn=(document.getElementById('toggleHttpbin')||{checked:true}).checked;
+    var tUrl=ipApiOn?DEFAULT_IPAPI_URL:((document.getElementById('testUrl')||{value:''}).value||'').trim()||DEFAULT_IPAPI_URL;
+    var tgt=targetOn?DEFAULT_TARGET_URL:((document.getElementById('targetUrl')||{value:''}).value||'').trim();
+    var tUrls=tgt?[{key:'custom',url:tgt,label:'Target'}]:[];
+    return{test_url:tUrl, target_url:tgt, target_urls:tUrls, skip_httpbin:!httpbinOn};
+  }
 }
 
 function buildFD(){
   var fd=new FormData();
-  // Smart toggle config
-  var ipApiOn=(document.getElementById('toggleIpApi')||{checked:true}).checked;
-  var targetOn=(document.getElementById('toggleTarget')||{checked:true}).checked;
-  var httpbinOn=(document.getElementById('toggleHttpbin')||{checked:true}).checked;
-  var testUrl=ipApiOn
-    ? DEFAULT_IPAPI_URL
-    : ((document.getElementById('testUrl')||{value:''}).value||'').trim()||DEFAULT_IPAPI_URL;
-  var targetUrl=targetOn
-    ? DEFAULT_TARGET_URL
-    : ((document.getElementById('targetUrl')||{value:''}).value||'').trim();
-  fd.append('test_url',testUrl);
-  fd.append('target_url',targetUrl);
-  fd.append('skip_httpbin',httpbinOn?'false':'true');
+  var pp=getPresetParams();
+  fd.append('test_url',pp.test_url);
+  fd.append('target_url',pp.target_url);
+  fd.append('target_urls',JSON.stringify(pp.target_urls||[]));
+  fd.append('skip_httpbin',pp.skip_httpbin?'true':'false');
   fd.append('concurrency',document.getElementById('concurrency').value);
   fd.append('timeout',document.getElementById('timeout').value);
   fd.append('retries',document.getElementById('retries').value);
   fd.append('top_n',document.getElementById('topN').value);
   if(activeSource.type==='file') fd.append('file',activeSource.file);
   else fd.append('file',new Blob([activeSource.text],{type:'text/plain'}),activeSource.name+'.txt');
-  fd.append('proxy_type', (document.getElementById('proxyType')||{value:'residential'}).value||'residential');
+  fd.append('proxy_type',(document.getElementById('proxyType')||{value:'residential'}).value||'residential');
   return fd;
 }
 
@@ -2185,9 +2354,22 @@ function renderIPGroups(containerId, emptyId, groups, isSess){
         +'<span class="ip-chip">'+esc(org)+'</span>'
         +'<span class="ip-chip">'+esc(loc)+'</span>'
         +(a.httpbin_pass===true?'<span class="ip-chip score">httpbin ✓</span>':a.httpbin_pass===false?'<span class="ip-chip bad">httpbin ✗</span>':'')
-        +(a.target_pass===true?'<span class="ip-chip score">target ✓</span>':a.target_pass===false?'<span class="ip-chip bad">target ✗</span>':'')
-        +(a.target_ms!=null?'<span class="ip-chip">'+(a.target_pass===false?'<s>':'')+a.target_ms+'ms tgt'+(a.target_pass===false?'</s>':'')+'</span>':'')
-        +(a.target_status&&a.target_status!==200?'<span class="ip-chip '+(a.target_status===403||a.target_status===429?'bad':'warn')+'">HTTP '+a.target_status+'</span>':'')
+        +(function(){
+            var tr=a.target_results;
+            var eps=tr?Object.values(tr):[];
+            if(eps.length>1){
+              // Multi-endpoint: show a chip per endpoint
+              return eps.map(function(ep){
+                var c=ep.pass?'score':'bad';
+                var tip=esc(ep.label)+' · '+esc(ep.url)+(ep.ms?' · '+ep.ms+'ms':'')+(ep.bot_vendor?' · '+ep.bot_vendor:'');
+                return '<span class="ip-chip '+c+'" title="'+tip+'">'+esc(ep.label)+(ep.pass?' ✓':' ✗')+'</span>';
+              }).join('');
+            }
+            // Single endpoint or no target — original style
+            return (a.target_pass===true?'<span class="ip-chip score">target ✓</span>':a.target_pass===false?'<span class="ip-chip bad">target ✗</span>':'')
+              +(a.target_ms!=null?'<span class="ip-chip">'+(a.target_pass===false?'<s>':'')+a.target_ms+'ms tgt'+(a.target_pass===false?'</s>':'')+'</span>':'')
+              +(a.target_status&&a.target_status!==200?'<span class="ip-chip '+(a.target_status===403||a.target_status===429?'bad':'warn')+'">HTTP '+a.target_status+'</span>':'');
+          })()
         +(a.edge_rtt!=null?'<span class="ip-chip">'+a.edge_rtt+'ms edge</span>':'')
         +(a.rotating?'<span class="ip-chip warn">rotating</span>':'')
         +(a.ssl_inspected?'<span class="ip-chip bad">SSL inspect</span>':'')
@@ -3078,7 +3260,7 @@ function setPage(page){
   document.getElementById('integrationsPage').style.display = page==='integrations' ? '' : 'none';
   if(page==='providers')    { refreshProviders(); }
   if(page==='settings')     { renderDbgLog(); renderAiKeys(); }
-  if(page==='integrations') { renderIntegrationList(); refreshApiTab(); }
+  if(page==='integrations') { renderIntegrationList(); refreshApiTab(); loadDiscordWebhook(); loadScheduleList(); }
 }
 
 // ── Providers page ─────────────────────────────────────────────────────────
@@ -3599,7 +3781,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.14';
+    var current='1.10.0';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -3759,18 +3941,259 @@ renderElitePresets();
 checkForUpdate();
 loadAnalyticsSettings();
 loadScoreWeights();
-dbgLog('Proxy Tester v1.09.12 started');
+dbgLog('Proxy Tester v1.10.0 started');
+updatePresetSummary();
+renderEndpointPreview();
 
-// ── Config test toggles ────────────────────────────────────────────────────
+// ── Config test toggles (CUSTOM preset only) ──────────────────────────────
 function onTestToggle(){
   var ipOn=document.getElementById('toggleIpApi').checked;
   var tgOn=document.getElementById('toggleTarget').checked;
   document.getElementById('ipApiUrlWrap').style.display=ipOn?'none':'';
   document.getElementById('targetUrlWrap').style.display=tgOn?'none':'';
 }
-// Default URL constants (used when toggle is ON)
+// Default URL constants
 var DEFAULT_IPAPI_URL='http://ip-api.com/json?fields=status,message,query,country,countryCode,isp,org,as,asname,mobile,proxy,hosting';
 var DEFAULT_TARGET_URL='https://www.walmart.com/search?q=iphone';
+
+// ── Preset selector ────────────────────────────────────────────────────────
+function onPresetChange(){
+  renderEndpointPreview();
+  var p=document.getElementById('probePreset').value;
+  document.getElementById('presetAntibotOpts').style.display = p==='antibot' ? '' : 'none';
+  document.getElementById('presetIpOpts').style.display      = p==='ip'      ? '' : 'none';
+  document.getElementById('presetSpeedOpts').style.display   = p==='speed'   ? '' : 'none';
+  document.getElementById('presetCustomOpts').style.display  = p==='custom'  ? '' : 'none';
+  updatePresetSummary();
+  updateSchedProxyCount();
+}
+function onAntibotTargetChange(){
+  var sel=document.getElementById('antibotTarget').value;
+  document.getElementById('antibotCustomUrlWrap').style.display=sel==='custom'?'':'none';
+  renderEndpointPreview();
+}
+function renderEndpointPreview(){
+  var el=document.getElementById('endpointPreview');
+  if(!el) return;
+  var preset=(document.getElementById('probePreset')||{value:''}).value;
+  if(preset!=='antibot'){el.style.display='none';return;}
+  var sel=(document.getElementById('antibotTarget')||{value:'walmart'}).value;
+  var eps=[];
+  if(sel==='custom'){
+    var cu=(document.getElementById('antibotCustomUrl')||{value:''}).value.trim();
+    if(cu) eps=[{label:'Custom',url:cu}];
+  } else {
+    eps=SITE_ENDPOINTS[sel]||[];
+  }
+  if(!eps.length){el.style.display='none';return;}
+  el.style.display='';
+  var hdr='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);padding:6px 10px 4px;background:var(--surface2);border-bottom:1px solid var(--border)">ENDPOINTS TESTED</div>';
+  var rows=eps.map(function(ep,i){
+    var u;try{u=new URL(ep.url);}catch(e){u={pathname:ep.url,search:'',hostname:ep.url};}
+    var path=u.pathname+(u.search||'');
+    var bg=i%2===0?'transparent':'rgba(255,255,255,.02)';
+    return '<div style="display:flex;align-items:baseline;gap:8px;padding:4px 10px;background:'+bg+';font-family:var(--mono);font-size:10px;">'
+      +'<span style="color:var(--accent);min-width:44px;flex-shrink:0">'+esc(ep.label)+'</span>'
+      +'<span style="color:var(--muted);word-break:break-all">'+esc(path)+'</span>'
+      +'</div>';
+  }).join('');
+  el.innerHTML=hdr+rows;
+}
+function updatePresetSummary(){
+  var el=document.getElementById('presetSummary');
+  if(!el) return;
+  var p=document.getElementById('probePreset').value;
+  var parts=[];
+  if(p==='antibot'){
+    parts=['ip-api.com','httpbin.org'];
+    var tsel=document.getElementById('antibotTarget');
+    var tval=tsel?tsel.value:'';
+    if(tval&&tval!=='custom'){
+      var eps=SITE_ENDPOINTS[tval];
+      if(eps&&eps.length){
+        try{
+          var host=new URL(eps[0].url).hostname.replace('www.','');
+          parts.push(host+' ('+eps.length+' endpoint'+(eps.length>1?'s':'')+')');
+        }catch(e){}
+      }
+    } else if(tval==='custom'){
+      var cu=(document.getElementById('antibotCustomUrl')||{value:''}).value.trim();
+      if(cu){ try{ parts.push(new URL(cu).hostname.replace('www.','')); }catch(e){ parts.push('custom'); } }
+    }
+  } else if(p==='ip'){
+    parts=['ip-api.com','httpbin.org'];
+  } else if(p==='speed'){
+    parts=['httpbin.org'];
+  } else {
+    parts=['custom config'];
+  }
+  el.textContent='Probes: '+parts.join(' · ');
+}
+
+// ── Scheduling ─────────────────────────────────────────────────────────────
+function onSchedRepeatChange(){
+  var on=document.getElementById('schedRepeat').checked;
+  document.getElementById('schedRepeatOpts').style.display=on?'block':'none';
+  document.getElementById('schedRepeatLabel').textContent=on?'Repeat every N hours':'Run once, then stop';
+}
+function onSchedDiscordChange(){
+  var on=document.getElementById('schedDiscordToggle').checked;
+  document.getElementById('schedDiscordOpts').style.display=on?'block':'none';
+  // Pre-fill from global webhook if field is empty
+  if(on){
+    var inp=document.getElementById('schedDiscordWebhook');
+    if(!inp.value.trim()){
+      fetch(API+'/api/notify-config').then(function(r){return r.json();}).then(function(d){
+        if(d.discord_webhook&&!inp.value.trim()) inp.value=d.discord_webhook;
+      }).catch(function(){});
+    }
+  }
+}
+function updateSchedProxyCount(){
+  var el=document.getElementById('schedProxyCount');
+  if(!el) return;
+  if(!activeSource){el.textContent='No list selected — select a list above first';return;}
+  var cnt=activeSource.text
+    ? activeSource.text.split('\n').filter(function(l){return l.trim();}).length
+    : 0;
+  el.textContent='Using: '+activeSource.name+' ('+cnt.toLocaleString()+' proxies)';
+}
+async function createSchedule(){
+  if(!activeSource){toast('Select a proxy list first.',true);return;}
+  var name=document.getElementById('schedName').value.trim()||'Scheduled Test';
+  var rawTime=document.getElementById('schedFireAt').value;
+  if(!rawTime){toast('Set a run date and time.',true);return;}
+  var fireAt=new Date(rawTime).toISOString();
+  var isRecurring=document.getElementById('schedRepeat').checked;
+  var intervalHours=parseFloat(document.getElementById('schedIntervalHours').value)||1;
+  var discordOn=document.getElementById('schedDiscordToggle').checked;
+  var discordWebhook=discordOn?(document.getElementById('schedDiscordWebhook').value.trim()||''):'';
+  var pp=getPresetParams();
+  var proxyText=activeSource.text||'';
+  if(activeSource.type==='file'){
+    try{ proxyText=await activeSource.file.text(); }catch(e){ toast('Could not read file.',true); return; }
+  }
+  var body={
+    name:name,
+    type:isRecurring?'recurring':'once',
+    fire_at:fireAt,
+    interval_hours:intervalHours,
+    proxy_text:proxyText,
+    proxy_type:(document.getElementById('proxyType')||{value:'residential'}).value||'residential',
+    target_url:pp.target_url,
+    target_urls:pp.target_urls||null,
+    preset:document.getElementById('probePreset').value,
+    concurrency:parseInt(document.getElementById('concurrency').value)||50,
+    timeout:parseFloat(document.getElementById('timeout').value)||10,
+    retries:parseInt(document.getElementById('retries').value)||1,
+    top_n:parseInt(document.getElementById('topN').value)||1000,
+    discord_webhook:discordWebhook,
+  };
+  try{
+    var r=await fetch(API+'/api/schedules',{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'application/json'}});
+    if(!r.ok){var e=await r.json();toast(e.error||'Error creating schedule.',true);return;}
+    toast('Schedule "'+name+'" created!');
+    document.getElementById('schedName').value='';
+    document.getElementById('schedFireAt').value='';
+    loadScheduleList();
+  }catch(e){toast(e.message,true);}
+}
+
+async function loadScheduleList(){
+  var el=document.getElementById('scheduleListEl');
+  if(!el) return;
+  try{
+    var r=await fetch(API+'/api/schedules');
+    if(!r.ok) return;
+    var list=await r.json();
+    if(!list.length){
+      el.innerHTML='<div class="empty" style="padding:16px">No scheduled tests yet. Configure one in the Tester → ANTIBOT preset.</div>';
+      return;
+    }
+    el.innerHTML=list.map(function(s){
+      var isDone=s.status==='done'||s.type==='once'&&s.last_fired;
+      var isPaused=s.status==='paused';
+      var nextStr=isDone?'Completed'
+        :(s.next_fire||s.fire_at)?new Date(s.next_fire||s.fire_at).toLocaleString():'—';
+      var statusColor=isDone?'var(--muted)':s.status==='running'?'var(--accent)':isPaused?'var(--muted)':'var(--gold)';
+      var statusLabel=isDone?'done':isPaused?'paused':s.status;
+      var targetHost='';
+      try{
+        if(s.target_urls&&s.target_urls.length){
+          targetHost=new URL(s.target_urls[0].url).hostname.replace('www.','')+' ('+s.target_urls.length+' ep)';
+        } else if(s.target_url){
+          targetHost=new URL(s.target_url).hostname.replace('www.','');
+        }
+      }catch(e){}
+      var hasWebhook=!!(s.discord_webhook);
+      return '<div class="sli" style="flex-direction:column;align-items:stretch;gap:4px;padding:10px 14px">'
+        +'<div style="display:flex;align-items:center;gap:6px">'
+        +'<span style="font-size:12px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(s.name)+'</span>'
+        +(hasWebhook?'<span title="Discord webhook set" style="font-size:11px;color:var(--accent)">🔔</span>':'')
+        +'<span style="font-size:10px;color:'+statusColor+';font-weight:700;text-transform:uppercase;white-space:nowrap">'+statusLabel+'</span>'
+        +(s.type==='recurring'&&!isDone
+          ?'<button class="ibt" title="'+(isPaused?'Resume':'Pause')+'" onclick="togglePauseSchedule(\''+s.id+'\','+isPaused+')" style="font-size:11px">'+(isPaused?'▶':'⏸')+'</button>'
+          :'')
+        +'<button class="ibt del" title="Delete" onclick="deleteSchedule(\''+s.id+'\')">✕</button>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'
+        +(s.type==='recurring'?'↺ Every '+s.interval_hours+'h':'⏱ One-time')
+        +(targetHost?' · '+esc(targetHost):'')
+        +' · '+(s.proxy_count||0).toLocaleString()+' proxies'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+( isDone?'Last ran: '+new Date(s.last_fired||s.fire_at).toLocaleString():'Next: '+nextStr)+'</div>'
+        +'</div>';
+    }).join('');
+  }catch(e){}
+}
+async function deleteSchedule(id){
+  if(!confirm('Delete this schedule?')) return;
+  try{
+    await fetch(API+'/api/schedules/'+id,{method:'DELETE'});
+    loadScheduleList();
+    toast('Schedule deleted.');
+  }catch(e){toast(e.message,true);}
+}
+async function togglePauseSchedule(id,isPaused){
+  try{
+    var newStatus=isPaused?'pending':'paused';
+    await fetch(API+'/api/schedules/'+id,{method:'PATCH',
+      body:JSON.stringify({status:newStatus}),
+      headers:{'Content-Type':'application/json'}});
+    loadScheduleList();
+    toast(isPaused?'Schedule resumed.':'Schedule paused.');
+  }catch(e){toast(e.message,true);}
+}
+
+// ── Discord webhook ────────────────────────────────────────────────────────
+async function loadDiscordWebhook(){
+  try{
+    var r=await fetch(API+'/api/notify-config');
+    if(!r.ok) return;
+    var d=await r.json();
+    var el=document.getElementById('discordWebhookInput');
+    if(el&&d.discord_webhook) el.value=d.discord_webhook;
+  }catch(e){}
+}
+async function saveDiscordWebhook(){
+  var val=(document.getElementById('discordWebhookInput').value||'').trim();
+  try{
+    var r=await fetch(API+'/api/notify-config',{method:'POST',body:JSON.stringify({discord_webhook:val}),headers:{'Content-Type':'application/json'}});
+    if(r.ok){toast('Webhook saved.');document.getElementById('discordWebhookStatus').textContent=val?'Saved.':'';}
+    else toast('Error saving webhook.',true);
+  }catch(e){toast(e.message,true);}
+}
+async function testDiscordWebhook(){
+  var val=(document.getElementById('discordWebhookInput').value||'').trim();
+  if(!val){toast('Enter a webhook URL first.',true);return;}
+  var statusEl=document.getElementById('discordWebhookStatus');
+  statusEl.textContent='Sending test...';statusEl.style.color='var(--muted)';
+  try{
+    var r=await fetch(API+'/api/notify-config',{method:'POST',body:JSON.stringify({discord_webhook:val,test:true}),headers:{'Content-Type':'application/json'}});
+    if(r.ok){statusEl.textContent='✓ Test sent — check your channel!';statusEl.style.color='var(--accent)';}
+    else{statusEl.textContent='✗ Failed — check the URL.';statusEl.style.color='var(--fail)';}
+  }catch(e){statusEl.textContent='✗ '+e.message;statusEl.style.color='var(--fail)';}
+}
 
 // ── AI Integration ────────────────────────────────────────────────────────
 var _aiJobIdForCompare=[]; // tracks last 2 completed job IDs
