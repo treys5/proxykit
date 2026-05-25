@@ -13,7 +13,7 @@ const cp    = require('child_process');
 const zlib  = require('zlib');
 
 const PORT        = process.env.PORT || 8080;
-const APP_VERSION = '1.09.13';
+const APP_VERSION = '1.09.14';
 
 // When packaged as an asar, __dirname is read-only.
 // Use APP_DATA_DIR (set by main.js to app.getPath('userData')) for all writes.
@@ -27,8 +27,6 @@ const ANALYTICS_URL = process.env.ANALYTICS_URL || 'https://proxykit-analytics.p
 const jobs      = {};
 const sessions  = {};
 const providers = {};
-
-const sessionGroups = {};
 
 // ── Analytics config (analytics.json in DATA_DIR) ────────────────────────────
 function loadAnalyticsConfig() {
@@ -1918,53 +1916,6 @@ const server = http.createServer(async function(req,res){
   }
 
   // ── Session Groups ─────────────────────────────────────────────────────────
-  if(pathname==='/api/session-groups'&&method==='GET'){
-    var sgList=Object.values(sessionGroups).sort(function(a,b){
-      if(b.favorited!==a.favorited) return b.favorited?1:-1;
-      return (a.order||0)-(b.order||0)||(a.name<b.name?-1:1);
-    });
-    return jsonRes(res,sgList);
-  }
-  if(pathname==='/api/session-groups'&&method==='POST'){
-    const body=await readBody(req); let ov={};
-    try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
-    if(!ov.name||!String(ov.name).trim()) return jsonRes(res,{error:'Name required'},400);
-    var sgId=genId();
-    sessionGroups[sgId]={id:sgId,name:String(ov.name).trim(),order:Object.keys(sessionGroups).length,
-      favorited:false,session_ids:[],created_at:new Date().toISOString()};
-    return jsonRes(res,sessionGroups[sgId]);
-  }
-  const sgMatch=pathname.match(/^\/api\/session-groups\/([^/]+)(\/.*)?$/);
-  if(sgMatch){
-    const sgId=sgMatch[1],sgSub=sgMatch[2]||'',sg=sessionGroups[sgId];
-    if(!sg) return jsonRes(res,{error:'Group not found'},404);
-    if(method==='PUT'&&sgSub===''){
-      const body=await readBody(req); let ov={};
-      try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
-      if(ov.name!=null&&String(ov.name).trim()) sg.name=String(ov.name).trim();
-      if(ov.favorited!=null) sg.favorited=!!ov.favorited;
-      if(ov.order!=null) sg.order=parseInt(ov.order)||0;
-      return jsonRes(res,sg);
-    }
-    if(method==='DELETE'&&sgSub===''){
-      delete sessionGroups[sgId];
-      return jsonRes(res,{ok:true});
-    }
-    if(method==='POST'&&sgSub==='/add'){
-      const body=await readBody(req); let ov={};
-      try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
-      if(ov.session_id&&sg.session_ids.indexOf(ov.session_id)<0) sg.session_ids.push(ov.session_id);
-      return jsonRes(res,sg);
-    }
-    if(method==='POST'&&sgSub==='/remove'){
-      const body=await readBody(req); let ov={};
-      try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
-      sg.session_ids=sg.session_ids.filter(function(id){return id!==ov.session_id;});
-      return jsonRes(res,sg);
-    }
-    return jsonRes(res,{error:'Not found'},404);
-  }
-
   // ── Providers ────────────────────────────────────────────────────────────────
 
   // List providers
@@ -2109,18 +2060,6 @@ const server = http.createServer(async function(req,res){
       return jsonRes(res,{session_id:sid,job_id:jobId,proxy_count:prov.proxies.length});
     }
 
-    // Link an existing tester session to this provider
-    if(method==='POST'&&psub==='/link-session'){
-      const body=await readBody(req); let ov={};
-      try{ov=JSON.parse(body.toString()||'{}');}catch(e){}
-      var linkSid=ov.session_id;
-      if(!linkSid||!sessions[linkSid]) return jsonRes(res,{error:'Session not found'},404);
-      if(prov.session_ids.indexOf(linkSid)<0){
-        prov.session_ids.push(linkSid);
-        prov.updated_at=new Date().toISOString();
-      }
-      return jsonRes(res,{linked:linkSid,total_sessions:prov.session_ids.length});
-    }
 
     if(method==='DELETE'){
       (prov.session_ids||[]).forEach(function(sid){

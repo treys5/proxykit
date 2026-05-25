@@ -504,7 +504,7 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.13</span></div>
+  <div class="logo"><div class="logo-dot"></div>PROXY TESTER <span id="appVersionLabel">v1.09.14</span></div>
   <div id="clock"></div>
 </header>
 <nav class="page-nav">
@@ -553,7 +553,7 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
     <div class="tabs">
       <div class="tab active" onclick="switchTab('paste')">PASTE</div>
       <div class="tab" onclick="switchTab('file')">FILE</div>
-      <div class="tab" onclick="switchTab('saved')" id="savedTab">GROUPS</div>
+      <div class="tab" onclick="switchTab('saved')" id="savedTab">SAVED</div>
       <div class="tab" onclick="switchTab('api')">API</div>
     </div>
     <div class="tc active" id="tab-paste">
@@ -689,10 +689,10 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 <!-- RIGHT ─────────────────────────────────────────────────────────────────── -->
 <div>
 
-  <!-- Sessions -->
+  <!-- Runs -->
   <div class="panel">
-    <div class="ph">⬡ SESSIONS <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="sessCount"></span></div>
-    <div id="sessionsList"><div class="empty">No sessions. Use Multi-Pass mode.</div></div>
+    <div class="ph">⬡ RUNS <span style="margin-left:auto;font-weight:400;color:var(--muted);font-size:10px" id="sessCount"></span></div>
+    <div id="sessionsList"><div class="empty">No runs yet. Upload a list and start a test.</div></div>
   </div>
 
   <!-- Cross-session comparison -->
@@ -1050,37 +1050,14 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
 
 <!-- LEFT ── -->
 <div>
-  <!-- Session Groups -->
-  <div class="panel">
-    <div class="ph">⬡ SESSION GROUPS
-      <button class="btn btn-out btn-sm" style="margin-left:auto;padding:3px 10px;font-size:10px" onclick="createSessionGroup()">+ GROUP</button>
-    </div>
-    <div id="sgList"><div class="empty" style="padding:16px">No groups yet.</div></div>
-  </div>
-
   <!-- Create Provider -->
   <div class="panel">
     <div class="ph">⬡ ADD PROVIDER</div>
     <div class="pb">
       <label>PROVIDER NAME</label>
       <input type="text" id="pvName" placeholder="e.g. Provider A — Tier 1">
-      <div class="mode-row" style="margin:10px 0 4px;">
-        <button class="mode-btn active" id="pvModePaste" onclick="setPvMode('paste')">PASTE LIST</button>
-        <button class="mode-btn" id="pvModeSession" onclick="setPvMode('session')">FROM SESSION</button>
-      </div>
-      <!-- Paste mode -->
-      <div id="pvPasteWrap">
-        <label>PROXY LIST</label>
-        <textarea id="pvText" rows="6" placeholder="host:port&#10;host:port:user:pass&#10;user:pass@host:port" oninput="pvTextChanged()"></textarea>
-      </div>
-      <!-- Session import mode -->
-      <div id="pvSessionWrap" style="display:none">
-        <label>IMPORT FROM TESTER SESSION</label>
-        <select id="pvSessionSelect" onchange="pvSessionSelected()">
-          <option value="">— Select a saved session —</option>
-        </select>
-        <div id="pvSessionPreview" style="font-size:11px;margin-top:6px;display:none;padding:7px 10px;border-radius:var(--r-xs);background:var(--bg);border:1px solid var(--border);"></div>
-      </div>
+      <label>PROXY LIST</label>
+      <textarea id="pvText" rows="6" placeholder="host:port&#10;host:port:user:pass&#10;user:pass@host:port" oninput="pvTextChanged()"></textarea>
       <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
         <span id="pvCounter" class="pcnt" style="flex:1">0 proxies</span>
         <button class="btn btn-sm" onclick="createProvider()">+ ADD PROVIDER</button>
@@ -1120,23 +1097,14 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
     </div>
     <div class="stats-row">
       <div class="stat"><div class="stat-v" id="pvdProxies">—</div><div class="stat-l">PROXIES</div></div>
-      <div class="stat"><div class="stat-v g" id="pvdSessCount">—</div><div class="stat-l">SESSIONS</div></div>
+      <div class="stat"><div class="stat-v g" id="pvdSessCount">—</div><div class="stat-l">RUNS</div></div>
       <div class="stat"><div class="stat-v gold" id="pvdResidential">—</div><div class="stat-l">RESIDENTIAL %</div></div>
       <div class="stat"><div class="stat-v" id="pvdScore">—</div><div class="stat-l">QUALITY SCORE</div></div>
     </div>
 
-    <!-- Sessions list -->
+    <!-- Runs list -->
     <div id="pvdSessionsList" style="border-top:1px solid var(--border);">
-      <div class="empty">No tests run yet.</div>
-    </div>
-
-    <!-- Link an existing tester session -->
-    <div class="link-sess-wrap" id="pvdLinkWrap">
-      <div class="link-sess-label">⬡ Link Tester Session</div>
-      <div class="link-sess-row">
-        <select id="pvdLinkSelect"><option value="">— Select a session to link —</option></select>
-        <button class="btn btn-out btn-sm" onclick="linkSessionToProvider()">LINK</button>
-      </div>
+      <div class="empty">No runs yet.</div>
     </div>
 
     <!-- Composite ranking -->
@@ -1351,17 +1319,6 @@ body.light-mode #updateInstallBtn{color:#ffffff;}
   </div>
 </div>
 
-<!-- ── Group Picker Dialog ────────────────────────────────────────────────── -->
-<div id="groupPickerDialog" style="display:none" class="app-dialog-backdrop">
-  <div class="app-dialog-box" style="min-width:360px;max-width:440px;">
-    <div class="app-dialog-msg">Save to which group?</div>
-    <div id="groupPickerList" style="margin-bottom:4px;max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
-    <div class="app-dialog-row" style="justify-content:space-between;">
-      <button class="btn btn-out btn-sm" onmousedown="event.stopPropagation()" onclick="groupPickerCreateNew()">+ NEW GROUP</button>
-      <button class="btn btn-red btn-sm" onmousedown="event.stopPropagation()" onclick="groupPickerCancel()">CANCEL</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 <div id="ctxMenu" style="display:none;position:fixed;z-index:9999;background:var(--surface2);border:1px solid var(--border-hi);border-radius:var(--r-sm);box-shadow:0 8px 32px rgba(0,0,0,.5);min-width:160px;overflow:hidden;"></div>
@@ -1373,7 +1330,6 @@ let activeSessionId=null, activeJobId=null;
 let runMode='single', pollTimer=null;
 let _sessAnalyzed=[], _lastRunCount=-1, _lastUpdatedAt='', _sessTypeFilter='all';
 let _sessionAnalytics=null, _sessionProviderFilter='all', _jobResults=[], _jobProviderFilter='all';
-let _savedGroupFilter=null; // null = show all groups
 
 setInterval(function(){ document.getElementById('clock').textContent=new Date().toISOString().replace('T',' ').split('.')[0]+' UTC'; },1000);
 
@@ -1382,7 +1338,7 @@ function switchTab(n){
   document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',['paste','file','saved','api'][i]===n);});
   document.querySelectorAll('.tc').forEach(function(c){c.classList.remove('active');});
   document.getElementById('tab-'+n).classList.add('active');
-  if(n==='saved') loadSessionGroups().then(function(){renderSaved();});
+  if(n==='saved') renderSaved();
   if(n==='api') refreshApiTab();
 }
 
@@ -1437,10 +1393,10 @@ async function updatePreRunEstimate(n){
     detEl.textContent='~'+d.avg_bytes_per_proxy.toLocaleString()+' bytes/proxy · from '+d.calibrated_from+' run'+(d.calibrated_from!==1?'s':'');
   }catch(e){mbEl.textContent='—';detEl.textContent='Run a test first to calibrate.';}
 }
-function persistList(name,text,proxyType,groupId){
+function persistList(name,text,proxyType){
   var lists=getLists(), id='list_'+Date.now(), n=countLines(text);
   lists[id]={id,name,text,count:n,saved:new Date().toISOString(),
-    proxy_type:proxyType||'residential',group_id:groupId||null};
+    proxy_type:proxyType||'residential'};
   setLists(lists); updateSavedTab();
   toast('Saved "'+name+'" — '+n.toLocaleString()+' proxies');
   autoSyncListToProvider(name,text);
@@ -1461,79 +1417,43 @@ async function saveFromPaste(){
   if(!text){toast('Nothing to save.',true);return;}
   var name=document.getElementById('pasteName').value.trim();
   if(!name){toast('Enter a list name.',true);return;}
-  var groupId=await pickGroupForSave();
-  if(groupId===false) return; // user cancelled
-  persistList(name,text,document.getElementById('proxyType').value||'residential',groupId);
+  persistList(name,text,document.getElementById('proxyType').value||'residential');
 }
 async function saveFromFile(){
   if(!selectedFile){toast('No file selected.',true);return;}
   var name=await appPrompt('List name:',selectedFile.name.replace(/\.[^.]+$/,''));
   if(!name||!name.trim())return;
-  var groupId=await pickGroupForSave();
-  if(groupId===false) return;
-  persistList(name.trim(),await selectedFile.text(),document.getElementById('proxyType').value||'residential',groupId);
+  persistList(name.trim(),await selectedFile.text(),document.getElementById('proxyType').value||'residential');
 }
 function updateSavedTab(){
   var c=Object.keys(getLists()).length;
-  document.getElementById('savedTab').textContent=c?'GROUPS ('+c+')':'GROUPS';
+  document.getElementById('savedTab').textContent=c?'SAVED ('+c+')':'SAVED';
   renderSaved();
 }
 function renderSaved(){
   var lists=getLists(), ids=Object.keys(lists).sort(function(a,b){return b.localeCompare(a);});
   var el=document.getElementById('savedEl');
 
-  // Group filter strip
-  var groupStripHtml='<div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--bg);">'
-    +'<button class="filter-btn'+(_savedGroupFilter===null?' active':'')+'" onclick="setSavedGroupFilter(null)">ALL ('+ids.length+')</button>';
-  _sgData.forEach(function(g){
-    var cnt=ids.filter(function(id){return lists[id]&&lists[id].group_id===g.id;}).length;
-    groupStripHtml+='<button class="filter-btn'+(_savedGroupFilter===g.id?' active':'')+'" onclick="setSavedGroupFilter(\''+g.id+'\')">'
-      +esc(g.name)+(cnt?' ('+cnt+')':' (0)')+'</button>';
-  });
-  groupStripHtml+='</div>';
-
   if(!ids.length){
-    el.innerHTML=groupStripHtml+'<div class="empty">No saved lists yet.<br><span style="font-size:11px">Click SAVE on the PASTE or FILE tabs to add one.</span></div>';
+    el.innerHTML='<div class="empty">No saved lists yet.<br><span style="font-size:11px">Click SAVE on the PASTE or FILE tabs to add one.</span></div>';
     document.getElementById('useSavedBtn').disabled=true;
     return;
   }
 
-  var filtered=ids.filter(function(id){
-    if(_savedGroupFilter===null) return true;
-    return lists[id]&&lists[id].group_id===_savedGroupFilter;
-  });
-
-  if(!filtered.length){
-    el.innerHTML=groupStripHtml+'<div class="empty">No lists in this group.</div>';
-    document.getElementById('useSavedBtn').disabled=true;
-    return;
-  }
-
-  el.innerHTML=groupStripHtml+filtered.map(function(id){
+  el.innerHTML=ids.map(function(id){
     var l=lists[id], sel=selectedSavedId===id?' selected':'';
     var pt=l.proxy_type||'residential';
     var ptLabel=pt==='residential'?'RESI':pt==='isp'?'ISP':'MIXED';
     var ptCls=pt==='residential'?'resi':pt==='isp'?'isp':'mixed';
-    var gName='';
-    if(l.group_id&&_savedGroupFilter===null){
-      var grp=_sgData.find(function(g){return g.id===l.group_id;});
-      if(grp) gName=' · '+esc(grp.name);
-    }
     return '<div class="sli'+sel+'" onclick="selectSaved(\''+id+'\')">'
       +'<div style="flex:1;min-width:0">'
       +'<div class="sli-name"><span class="type-pill '+ptCls+'">'+ptLabel+'</span> '+esc(l.name)+'</div>'
-      +'<div class="sli-meta">'+l.count.toLocaleString()+' · '+new Date(l.saved).toLocaleDateString()+gName+'</div>'
+      +'<div class="sli-meta">'+l.count.toLocaleString()+' · '+new Date(l.saved).toLocaleDateString()+'</div>'
       +'</div>'
       +'<button class="ibt" onclick="renameSaved(event,\''+id+'\')">✎</button>'
       +'<button class="ibt del" onclick="deleteSaved(event,\''+id+'\')">✕</button>'
       +'</div>';
   }).join('');
-}
-function setSavedGroupFilter(gid){
-  _savedGroupFilter=gid;
-  selectedSavedId=null;
-  document.getElementById('useSavedBtn').disabled=true;
-  renderSaved();
 }
 function selectSaved(id){ selectedSavedId=id; renderSaved(); document.getElementById('useSavedBtn').disabled=false; }
 function deleteSaved(e,id){ e.stopPropagation(); var l=getLists(); if(!confirm('Delete "'+l[id].name+'"?'))return; delete l[id]; setLists(l); if(selectedSavedId===id)selectedSavedId=null; updateSavedTab(); }
@@ -3156,7 +3076,7 @@ function setPage(page){
   document.getElementById('providersPage').style.display    = page==='providers'    ? '' : 'none';
   document.getElementById('settingsPage').style.display     = page==='settings'     ? '' : 'none';
   document.getElementById('integrationsPage').style.display = page==='integrations' ? '' : 'none';
-  if(page==='providers')    { refreshProviders(); loadSessionGroups(); }
+  if(page==='providers')    { refreshProviders(); }
   if(page==='settings')     { renderDbgLog(); renderAiKeys(); }
   if(page==='integrations') { renderIntegrationList(); refreshApiTab(); }
 }
@@ -3174,67 +3094,11 @@ function pvTextChanged(){
   },200);
 }
 
-function setPvMode(mode){
-  var isPaste=mode==='paste';
-  document.getElementById('pvModePaste').classList.toggle('active',isPaste);
-  document.getElementById('pvModeSession').classList.toggle('active',!isPaste);
-  document.getElementById('pvPasteWrap').style.display=isPaste?'':'none';
-  document.getElementById('pvSessionWrap').style.display=isPaste?'none':'';
-  if(!isPaste) loadPvSessionDropdown();
-}
-
-async function loadPvSessionDropdown(){
-  var sel=document.getElementById('pvSessionSelect');
-  try{
-    var r=await fetch(API+'/api/sessions');
-    var list=await r.json();
-    sel.innerHTML='<option value="">— Select a saved session —</option>'
-      +list.map(function(s){
-        return '<option value="'+s.session_id+'">'+esc(s.name)+' ('+s.proxy_count.toLocaleString()+' proxies, '+s.run_count+' run'+(s.run_count!==1?'s':'')+')</option>';
-      }).join('');
-  }catch(e){ sel.innerHTML='<option value="">Error loading sessions</option>'; }
-}
-
-async function pvSessionSelected(){
-  var sid=document.getElementById('pvSessionSelect').value;
-  var preview=document.getElementById('pvSessionPreview');
-  var counter=document.getElementById('pvCounter');
-  if(!sid){
-    preview.style.display='none';
-    counter.textContent='0 proxies'; counter.className='pcnt';
-    return;
-  }
-  preview.style.display='';
-  preview.style.color='var(--muted)';
-  preview.textContent='Loading proxy list…';
-  try{
-    var r=await fetch(API+'/api/sessions/'+sid+'/list');
-    if(!r.ok) throw new Error('Failed');
-    var text=await r.text();
-    var lines=text.split('\n').filter(function(l){return l.trim();});
-    // Fill the hidden textarea so createProvider() works unchanged
-    document.getElementById('pvText').value=text;
-    pvTextChanged();
-    // Auto-fill provider name if blank
-    var selEl=document.getElementById('pvSessionSelect');
-    var sessLabel=selEl.options[selEl.selectedIndex].text.split(' (')[0];
-    var nameEl=document.getElementById('pvName');
-    if(!nameEl.value.trim()) nameEl.value=sessLabel;
-    preview.style.color='var(--accent)';
-    preview.textContent='✓ '+lines.length.toLocaleString()+' proxies imported — ready to add provider';
-    // store session id so we can auto-link after creation
-    document.getElementById('pvSessionSelect').dataset.imported=sid;
-  }catch(e){
-    preview.style.color='var(--fail)';
-    preview.textContent='✗ Could not load proxy list from that session';
-    document.getElementById('pvSessionSelect').dataset.imported='';
-  }
-}
 
 async function refreshProviders(){
   try{
     var r=await fetch(API+'/api/providers');
-    if(r.ok){ _pvData=await r.json(); renderProviderList(); loadSessionGroups(); }
+    if(r.ok){ _pvData=await r.json(); renderProviderList(); }
   }catch(e){}
 }
 
@@ -3273,7 +3137,6 @@ async function loadProviderDetail(id){
     if(!r.ok) return;
     _pvDetailData=await r.json();
     renderProviderDetailHeader(_pvDetailData);
-    await populateLinkDropdown();
     await loadProviderComposite(_pvDetailData);
   }catch(e){}
 }
@@ -3289,7 +3152,7 @@ function renderProviderDetailHeader(data){
   if(data.sessions&&data.sessions.length){
     sessEl.innerHTML=data.sessions.map(function(s,i){
       return '<div class="job-card"><div class="job-top">'
-        +'<div class="job-name">Test '+(i+1)+' — '+s.run_count+' run'+(s.run_count!==1?'s':'')+'</div>'
+        +'<div class="job-name">Run '+(i+1)+' · '+s.run_count+' run'+(s.run_count!==1?'s':'')+'</div>'
         +'<span class="badge '+(s.status==='running'?'b-run':'b-done')+'">'+s.status.toUpperCase()+'</span>'
         +'</div>'
         +'<div class="job-meta">'
@@ -3300,7 +3163,7 @@ function renderProviderDetailHeader(data){
         +'</div></div>';
     }).join('');
   } else {
-    sessEl.innerHTML='<div class="empty" style="padding:14px">No tests run yet. Click ▶ RUN TEST above.</div>';
+    sessEl.innerHTML='<div class="empty" style="padding:14px">No runs yet. Click ▶ RUN TEST above.</div>';
   }
 }
 
@@ -3348,49 +3211,12 @@ async function loadProviderComposite(data){
   document.getElementById('pvdCompositeBody').innerHTML=compRows||'<tr><td colspan="7" style="color:var(--muted);padding:12px">No data yet.</td></tr>';
 }
 
-async function populateLinkDropdown(){
-  // Fill the "Link Tester Session" dropdown with sessions not already linked
-  var sel=document.getElementById('pvdLinkSelect');
-  if(!sel) return;
-  var prov=_pvDetailData;
-  var linkedSet=new Set(prov?prov.session_ids||[]:[]);
-  try{
-    var r=await fetch(API+'/api/sessions');
-    if(!r.ok) return;
-    var allSess=await r.json();
-    var available=allSess.filter(function(s){ return !linkedSet.has(s.session_id); });
-    sel.innerHTML='<option value="">— Select a session to link —</option>'
-      +available.map(function(s){
-        return '<option value="'+s.session_id+'">'+esc(s.name)+' ('+s.run_count+' runs · '+s.proxy_count.toLocaleString()+' proxies)</option>';
-      }).join('');
-    document.getElementById('pvdLinkWrap').style.display=available.length?'':'none';
-  }catch(e){}
-}
-
-async function linkSessionToProvider(){
-  if(!_activePvId) return;
-  var sid=document.getElementById('pvdLinkSelect').value;
-  if(!sid){ toast('Select a session first.',true); return; }
-  try{
-    var r=await fetch(API+'/api/providers/'+_activePvId+'/link-session',{
-      method:'POST',body:JSON.stringify({session_id:sid}),
-      headers:{'Content-Type':'application/json'}
-    });
-    if(!r.ok){ var e=await r.json(); toast(e.error||'Error',true); return; }
-    toast('Session linked successfully!');
-    await loadProviderDetail(_activePvId);
-    await refreshProviders();
-  }catch(e){ toast(e.message,true); }
-}
 
 async function createProvider(){
   var name=document.getElementById('pvName').value.trim();
   var text=document.getElementById('pvText').value.trim();
   if(!name){ toast('Enter a provider name.',true); return; }
-  if(!text){ toast('Paste or import a proxy list first.',true); return; }
-  // Check if we're in session-import mode so we can auto-link
-  var isSessionMode=document.getElementById('pvModeSession').classList.contains('active');
-  var importedSid=isSessionMode?(document.getElementById('pvSessionSelect').dataset.imported||''):'';
+  if(!text){ toast('Paste a proxy list first.',true); return; }
   var fd=new FormData();
   fd.append('provider_name',name);
   fd.append('file',new Blob([text],{type:'text/plain'}),name+'.txt');
@@ -3398,21 +3224,10 @@ async function createProvider(){
     var r=await fetch(API+'/api/providers',{method:'POST',body:fd});
     if(!r.ok){ var e=await r.json(); toast(e.error||'Error',true); return; }
     var d=await r.json();
-    // Auto-link the source session when created from "FROM SESSION" mode
-    if(importedSid){
-      await fetch(API+'/api/providers/'+d.id+'/link-session',{
-        method:'POST',body:JSON.stringify({session_id:importedSid}),
-        headers:{'Content-Type':'application/json'}
-      });
-    }
-    toast('Provider "'+d.name+'" added — '+d.proxy_count.toLocaleString()+' proxies'+(importedSid?' · session linked':''));
+    toast('Provider "'+d.name+'" added — '+d.proxy_count.toLocaleString()+' proxies');
     document.getElementById('pvName').value='';
     document.getElementById('pvText').value='';
     document.getElementById('pvCounter').textContent='0 proxies';
-    document.getElementById('pvSessionPreview').style.display='none';
-    document.getElementById('pvSessionSelect').value='';
-    document.getElementById('pvSessionSelect').dataset.imported='';
-    setPvMode('paste');
     await refreshProviders();
     selectProvider(d.id);
   }catch(e){ toast(e.message,true); }
@@ -3550,114 +3365,8 @@ async function confirmDeletePv(pid){
   await deleteProvider();
 }
 
-// ── Session Groups ─────────────────────────────────────────────────────────
-var _sgData=[], _activeGroupId=null, _sgDragId=null;
+// ── (session groups removed) ───────────────────────────────────────────────
 
-async function loadSessionGroups(){
-  try{
-    var r=await fetch(API+'/api/session-groups');
-    if(r.ok){_sgData=await r.json();renderSessionGroups();}
-  }catch(e){}
-}
-
-function renderSessionGroups(){
-  var el=document.getElementById('sgList');
-  if(!el) return;
-  if(!_sgData.length){el.innerHTML='<div class="empty" style="padding:12px">No groups yet. Click + GROUP.</div>';return;}
-  // "ALL" row first
-  var allRow='<div class="sg-row'+(_activeGroupId===null?' active':'')+'" onclick="selectSessionGroup(null)">'
-    +'<span class="sg-fav" style="color:var(--muted)">⊙</span>'
-    +'<span class="sg-name">All Sessions</span>'
-    +'<span class="sg-count">'+_sgData.reduce(function(s,g){return s+g.session_ids.length;},0)+'</span>'
-    +'</div>';
-  var rows=_sgData.map(function(g){
-    var isActive=_activeGroupId===g.id;
-    return '<div class="sg-row'+(isActive?' active':'')+'" draggable="true"'
-      +' data-id="'+g.id+'"'
-      +' onclick="selectSessionGroup(\''+g.id+'\')"'
-      +' oncontextmenu="sgContextMenu(event,\''+g.id+'\')"'
-      +' ondragstart="sgDragStart(event,\''+g.id+'\')"'
-      +' ondragover="sgDragOver(event)"'
-      +' ondragleave="sgDragLeave(event)"'
-      +' ondrop="sgDrop(event,\''+g.id+'\')">'
-      +'<span class="sg-fav" style="color:'+(g.favorited?'var(--gold)':'var(--border-hi)')+'" onclick="toggleFavoriteGroup(event,\''+g.id+'\')" title="Toggle favorite">'+(g.favorited?'★':'☆')+'</span>'
-      +'<span class="sg-name">'+esc(g.name)+'</span>'
-      +'<span class="sg-count">'+g.session_ids.length+' sess</span>'
-      +'</div>';
-  }).join('');
-  el.innerHTML=allRow+rows;
-}
-
-function selectSessionGroup(id){
-  _activeGroupId=id;
-  renderSessionGroups();
-  renderProviderList(); // filter by group if needed
-}
-
-function sgContextMenu(e,gid){
-  e.stopPropagation();
-  var g=_sgData.find(function(x){return x.id===gid;});
-  showCtxMenu(e,[
-    {label:'Rename',action:'renameSessionGroup(\''+gid+'\')'},
-    {label:(g&&g.favorited?'Unfavorite':'Favorite'),action:'toggleFavoriteGroup(null,\''+gid+'\')'},
-    {label:'Delete',action:'deleteSessionGroup(\''+gid+'\')',danger:true}
-  ]);
-}
-
-async function createSessionGroup(){
-  var name=await appPrompt('New group name:');
-  if(!name||!name.trim()) return;
-  try{
-    var r=await fetch(API+'/api/session-groups',{method:'POST',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
-    if(r.ok){toast('Group "'+name.trim()+'" created');await loadSessionGroups();}
-    else toast('Error creating group',true);
-  }catch(e){toast(e.message,true);}
-}
-async function renameSessionGroup(gid){
-  var g=_sgData.find(function(x){return x.id===gid;});
-  var name=await appPrompt('New group name:',g?g.name:'');
-  if(!name||!name.trim()) return;
-  try{
-    await fetch(API+'/api/session-groups/'+gid,{method:'PUT',body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
-    await loadSessionGroups();
-  }catch(e){toast(e.message,true);}
-}
-async function deleteSessionGroup(gid){
-  if(!confirm('Delete this group?')) return;
-  try{
-    await fetch(API+'/api/session-groups/'+gid,{method:'DELETE'});
-    if(_activeGroupId===gid) _activeGroupId=null;
-    await loadSessionGroups();
-  }catch(e){toast(e.message,true);}
-}
-async function toggleFavoriteGroup(e,gid){
-  if(e) e.stopPropagation();
-  var g=_sgData.find(function(x){return x.id===gid;});
-  if(!g) return;
-  try{
-    await fetch(API+'/api/session-groups/'+gid,{method:'PUT',body:JSON.stringify({favorited:!g.favorited}),headers:{'Content-Type':'application/json'}});
-    await loadSessionGroups();
-  }catch(e){}
-}
-function sgDragStart(e,id){ _sgDragId=id; e.dataTransfer.effectAllowed='move'; }
-function sgDragOver(e){ e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
-function sgDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
-async function sgDrop(e,targetId){
-  e.currentTarget.classList.remove('drag-over');
-  if(!_sgDragId||_sgDragId===targetId) return;
-  var from=_sgData.find(function(x){return x.id===_sgDragId;});
-  var to=_sgData.find(function(x){return x.id===targetId;});
-  if(!from||!to) return;
-  var tmp=from.order; from.order=to.order; to.order=tmp;
-  _sgDragId=null;
-  try{
-    await Promise.all([
-      fetch(API+'/api/session-groups/'+from.id,{method:'PUT',body:JSON.stringify({order:from.order}),headers:{'Content-Type':'application/json'}}),
-      fetch(API+'/api/session-groups/'+to.id,{method:'PUT',body:JSON.stringify({order:to.order}),headers:{'Content-Type':'application/json'}})
-    ]);
-    await loadSessionGroups();
-  }catch(e){}
-}
 
 // ── Custom dialog (replaces prompt() which is unavailable in Electron) ────
 var _appDialogResolve=null;
@@ -3687,83 +3396,6 @@ function appDialogCancel(){
 // Close dialog on backdrop click
 document.getElementById('appDialog').addEventListener('mousedown',function(e){
   if(e.target===this) appDialogCancel();
-});
-
-// ── Group Picker (for save-to-group flow) ─────────────────────────────────
-var _groupPickerResolve=null;
-
-async function pickGroupForSave(){
-  // Refresh group list from server first
-  await loadSessionGroups();
-  if(!_sgData.length){
-    // No groups exist — must create one before saving
-    toast('Create a group first to organise your lists.',true);
-    var name=await appPrompt('Name your first group:');
-    if(!name||!name.trim()) return false;
-    try{
-      var r=await fetch(API+'/api/session-groups',{method:'POST',
-        body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
-      if(!r.ok){toast('Could not create group.',true);return false;}
-      var d=await r.json();
-      await loadSessionGroups();
-      toast('Group "'+name.trim()+'" created');
-      return d.id;
-    }catch(e){toast(e.message,true);return false;}
-  }
-  // Groups exist — show picker
-  return await showGroupPicker();
-}
-
-function showGroupPicker(){
-  return new Promise(function(resolve){
-    _groupPickerResolve=resolve;
-    var listEl=document.getElementById('groupPickerList');
-    listEl.innerHTML=_sgData.map(function(g){
-      var fav=g.favorited?'★':'☆';
-      var favColor=g.favorited?'var(--gold)':'var(--border-hi)';
-      return '<div class="sli" style="cursor:pointer;user-select:none" onmousedown="event.stopPropagation()" onclick="groupPickerSelect(\''+g.id+'\')">'
-        +'<span style="font-size:13px;color:'+favColor+';flex-shrink:0">'+fav+'</span>'
-        +'<div style="flex:1;min-width:0">'
-        +'<div class="sli-name">'+esc(g.name)+'</div>'
-        +'<div class="sli-meta">'+g.session_ids.length+' items</div>'
-        +'</div>'
-        +'</div>';
-    }).join('');
-    document.getElementById('groupPickerDialog').style.display='flex';
-  });
-}
-function groupPickerSelect(gid){
-  document.getElementById('groupPickerDialog').style.display='none';
-  if(_groupPickerResolve){_groupPickerResolve(gid);_groupPickerResolve=null;}
-}
-function groupPickerCancel(){
-  document.getElementById('groupPickerDialog').style.display='none';
-  if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}
-}
-async function groupPickerCreateNew(){
-  document.getElementById('groupPickerDialog').style.display='none';
-  var name=await appPrompt('New group name:');
-  if(!name||!name.trim()){
-    // User cancelled — put the picker back
-    showGroupPicker().then(function(r){if(_groupPickerResolve){_groupPickerResolve(r);_groupPickerResolve=null;}});
-    return;
-  }
-  try{
-    var r=await fetch(API+'/api/session-groups',{method:'POST',
-      body:JSON.stringify({name:name.trim()}),headers:{'Content-Type':'application/json'}});
-    if(!r.ok){toast('Could not create group.',true);if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}return;}
-    var d=await r.json();
-    await loadSessionGroups();
-    toast('Group "'+name.trim()+'" created');
-    if(_groupPickerResolve){_groupPickerResolve(d.id);_groupPickerResolve=null;}
-  }catch(e){
-    toast(e.message,true);
-    if(_groupPickerResolve){_groupPickerResolve(false);_groupPickerResolve=null;}
-  }
-}
-// Close group picker on backdrop click
-document.getElementById('groupPickerDialog').addEventListener('mousedown',function(e){
-  if(e.target===this) groupPickerCancel();
 });
 
 // ── Debug log ──────────────────────────────────────────────────────────────
@@ -3967,7 +3599,7 @@ async function checkForUpdate(){
     var latest=(d.tag_name||'').replace(/^v/,'');
     // Pull current version from server
     var vr=await fetch('/api/version',{cache:'no-store'}).catch(()=>null);
-    var current='1.09.13';
+    var current='1.09.14';
     if(vr&&vr.ok){ try{ var vd=await vr.json(); current=vd.version||current; }catch(e){} }
     if(!latest) return;
     // Simple semver compare
@@ -4121,7 +3753,6 @@ fetch('/api/version',{cache:'no-store'}).then(function(r){return r.json();}).the
 
 updateSavedTab();
 startPolling();
-loadSessionGroups();
 intTypeChanged();
 renderIntegrationList();
 renderElitePresets();
