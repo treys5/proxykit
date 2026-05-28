@@ -1,0 +1,43 @@
+# Compiled binary
+ProxyKit.exe
+ProxyTester.exe
+*.exe
+
+# Go build artifacts
+resource.syso
+*.syso
+
+# Release packages
+release/
+
+# App runtime data (never commit user data or secrets)
+*.json
+!versioninfo.json
+results/
+px_status.json
+cloud_auth.json
+notify.json
+schedules.json
+px_status.json
+ai-keys.json
+score-config.json
+analytics.json
+calibration.json
+device_id.json
+providers.json
+proxy_lists.json
+integrations.json
+*.bat.log
+*.log
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Stray output files
+]
+
+# Editor
+.vscode/
+*.swp
+*~

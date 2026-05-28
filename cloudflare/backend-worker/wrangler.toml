@@ -1,0 +1,28 @@
+name              = "proxykit-backend"
+main              = "src/index.js"
+compatibility_date = "2024-09-23"
+workers_dev       = true
+
+# ── D1 database ───────────────────────────────────────────────────────────────
+[[d1_databases]]
+binding       = "DB"
+database_name = "proxykit-backend"
+database_id   = "4520ef4e-c74c-4fe4-9ed5-29aeb551df6a"
+
+# ── KV namespace (session tokens) ────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "SESSIONS"
+id      = "8c823d907a03411cbf78df5789bfce5f"
+
+# ── Secrets (set once via CLI, never commit) ──────────────────────────────────
+# npx wrangler secret put WHOP_WEBHOOK_SECRET  ← from Whop webhook settings (whsec_...)
+# npx wrangler secret put WHOP_API_KEY         ← your Whop API key (for hub user token verification)
+# npx wrangler secret put ADMIN_KEY            ← admin panel / admin API access key
+# npx wrangler secret put DISCORD_PX_WEBHOOK   ← ProxyKit server webhook URL for PX change alerts
+
+# ── Optional environment variables ───────────────────────────────────────────
+[vars]
+ENVIRONMENT        = "production"
+APP_NAME           = "ProxyKit"
+# WHOP_PRODUCT_ID  = "prod_xxxxxxxx"          # Restrict webhook to one product
+# DISCORD_INVITE_URL = "https://discord.gg/XXXXXXXXX"  # Shown on hub after key activation
